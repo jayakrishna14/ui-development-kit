@@ -2524,8 +2524,8 @@ ipcMain.handle('list-workflow-library-operators', async (event, ) => {
 ipcMain.handle('list-workflow-library-triggers', async (event, request: sdk.WorkflowsV2025ApiListWorkflowLibraryTriggersRequest = {}) => {
     return await sdkWrapper.listWorkflowLibraryTriggers(request, apiConfig);
 });
-ipcMain.handle('list-workflows', async (event, ) => {
-    return await sdkWrapper.listWorkflows(apiConfig);
+ipcMain.handle('list-workflows', async (event, request?: { limit?: number; offset?: number }) => {
+    return await sdkWrapper.listWorkflows(apiConfig, request);
 });
 ipcMain.handle('patch-workflow', async (event, request: sdk.WorkflowsV2025ApiPatchWorkflowRequest) => {
     return await sdkWrapper.patchWorkflow(request, apiConfig);

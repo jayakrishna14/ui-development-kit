@@ -79,7 +79,7 @@ export class WorkflowsComponent implements OnInit, AfterViewInit {
     this.dataSource.sortingDataAccessor = (item: any, property: string) => {
       switch (property) {
         case 'owner': return this.getOwnerName(item).toLowerCase();
-        case 'type': return item.trigger?.type || '';
+        case 'type': return this.getTriggerType(item).toLowerCase();
         case 'name': return item.name || '';
         case 'description': return item.description || '';
         case 'size': return this.getDefinitionSize(item);
@@ -98,7 +98,7 @@ export class WorkflowsComponent implements OnInit, AfterViewInit {
         (data.name && data.name.toLowerCase().includes(searchStr)) ||
         (data.description && data.description.toLowerCase().includes(searchStr)) ||
         (data.id && data.id.toLowerCase().includes(searchStr)) ||
-        (data.trigger?.type && data.trigger.type.toLowerCase().includes(searchStr)) ||
+        (this.getTriggerType(data).toLowerCase().includes(searchStr)) ||
         (data.owner?.name && data.owner.name.toLowerCase().includes(searchStr)) ||
         (data.owner?.id && data.owner.id.toLowerCase().includes(searchStr))
       );
@@ -111,24 +111,16 @@ export class WorkflowsComponent implements OnInit, AfterViewInit {
     this.errorMessage = '';
 
     try {
-      const res = await this.sdk.listWorkflows();
-      const responseData: unknown = (res as { data?: unknown }).data ?? res;
-      const data = Array.isArray(responseData)
-        ? responseData
-        : this.hasItems(responseData)
-          ? responseData.items
-          : [];
+      const data = await this.loadAllWorkflows();
 
       this.dataSource.data = data;
       this.selectedWorkflows.clear();
-      this.setLastApiResponse('List workflows', res);
       setTimeout(() => this.attachTableFeatures());
     } catch (err: any) {
       console.error('Workflow load failed:', err);
       this.error = true;
       this.errorMessage = err?.response?.data?.message || err?.message || 'Failed to load workflows';
       this.dataSource.data = [];
-      this.setLastApiResponse('List workflows', err?.response || err);
     } finally {
       this.loading = false;
     }
@@ -137,6 +129,7 @@ export class WorkflowsComponent implements OnInit, AfterViewInit {
   applyFilter(event: Event): void {
     const value = (event.target as HTMLInputElement).value;
     this.dataSource.filter = value.trim().toLowerCase();
+    this.dataSource.paginator?.firstPage();
   }
 
   get enabledCount(): number {
@@ -151,10 +144,34 @@ export class WorkflowsComponent implements OnInit, AfterViewInit {
     return workflow?.owner?.name || workflow?.owner?.id || '—';
   }
 
+  getTriggerType(workflow: any): string {
+    const attributes = this.getTriggerAttributes(workflow);
+    if (attributes === null || attributes === undefined) {
+      return workflow?.trigger?.displayName || workflow?.trigger?.type || '—';
+    }
+    if (typeof attributes === 'string') {
+      return attributes;
+    }
+    if (typeof attributes === 'number' || typeof attributes === 'boolean') {
+      return String(attributes);
+    }
+    if (typeof attributes === 'object') {
+      return attributes.displayName
+        || attributes.name
+        || attributes.type
+        || attributes.id
+        || JSON.stringify(attributes);
+    }
+    return '—';
+  }
+
   getStepCount(workflow: any): number {
     const definition = workflow?.definition || workflow;
     if (Array.isArray(definition?.steps)) {
       return definition.steps.length;
+    }
+    if (definition?.steps && typeof definition.steps === 'object') {
+      return Object.keys(definition.steps).length;
     }
     if (Array.isArray(definition?.nodes)) {
       return definition.nodes.length;
@@ -325,6 +342,42 @@ export class WorkflowsComponent implements OnInit, AfterViewInit {
     return typeof value === 'object'
       && value !== null
       && Array.isArray((value as { items?: unknown }).items);
+  }
+
+  private getTriggerAttributes(workflow: any): any {
+    const trigger = workflow?.trigger;
+    return trigger?.EVENT?.attributes
+      ?? trigger?.Event?.attributes
+      ?? trigger?.event?.attributes
+      ?? trigger?.attributes;
+  }
+
+  private async loadAllWorkflows(): Promise<any[]> {
+    const limit = 250;
+    let offset = 0;
+    const workflows: any[] = [];
+
+    while (true) {
+      const res = await this.sdk.listWorkflows({ limit, offset });
+      const page = this.extractWorkflows(res);
+      workflows.push(...page);
+
+      if (page.length < limit) {
+        break;
+      }
+      offset += limit;
+    }
+
+    return workflows;
+  }
+
+  private extractWorkflows(response: unknown): any[] {
+    const responseData: unknown = (response as { data?: unknown })?.data ?? response;
+    return Array.isArray(responseData)
+      ? responseData
+      : this.hasItems(responseData)
+        ? responseData.items
+        : [];
   }
 
   toggleColumn(column: string): void {

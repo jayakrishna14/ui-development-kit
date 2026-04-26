@@ -3367,9 +3367,9 @@ async listWorkflowLibraryTriggers(requestParameters: sdk.WorkflowsV2025ApiListWo
     await this.checkSessionBeforeCall();
     return this.electronAPI.listWorkflowLibraryTriggers(requestParameters) as Promise<AxiosResponse<Array<sdk.WorkflowLibraryTriggerV2025>, any>>;
 }
-async listWorkflows(): Promise<AxiosResponse<Array<sdk.WorkflowV2025>, any>> {
+async listWorkflows(requestParameters: { limit?: number; offset?: number } = {}): Promise<AxiosResponse<Array<sdk.WorkflowV2025>, any>> {
     await this.checkSessionBeforeCall();
-    return this.electronAPI.listWorkflows() as Promise<AxiosResponse<Array<sdk.WorkflowV2025>, any>>;
+    return this.electronAPI.listWorkflows(requestParameters) as Promise<AxiosResponse<Array<sdk.WorkflowV2025>, any>>;
 }
 async patchWorkflow(requestParameters: sdk.WorkflowsV2025ApiPatchWorkflowRequest): Promise<AxiosResponse<sdk.WorkflowV2025, any>> {
     await this.checkSessionBeforeCall();

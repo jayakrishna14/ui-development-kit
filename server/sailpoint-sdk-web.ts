@@ -4201,9 +4201,11 @@ const sdkFunctionsObject: { [key: string]: (params: any, config: sdk.Configurati
     return handleApiCall(() => workflowsv2025api.listWorkflowLibraryTriggers(requestParameters));
   },
   // List all workflows in the tenant.
-  listWorkflows: (apiConfig: sdk.Configuration): Promise<ApiResponse<Array<sdk.WorkflowV2025>>> => {
+  listWorkflows: (requestParameters: { limit?: number; offset?: number } = {}, apiConfig: sdk.Configuration): Promise<ApiResponse<Array<sdk.WorkflowV2025>>> => {
     const workflowsv2025api = new sdk.WorkflowsV2025Api(apiConfig);
-    return handleApiCall(() => workflowsv2025api.listWorkflows());
+    return handleApiCall(() => workflowsv2025api.listWorkflows({
+      params: requestParameters
+    }));
   },
   // Partially update an existing Workflow using [JSON Patch](https://tools.ietf.org/html/rfc6902) syntax.
   patchWorkflow: (requestParameters: sdk.WorkflowsV2025ApiPatchWorkflowRequest, apiConfig: sdk.Configuration): Promise<ApiResponse<sdk.WorkflowV2025>> => {

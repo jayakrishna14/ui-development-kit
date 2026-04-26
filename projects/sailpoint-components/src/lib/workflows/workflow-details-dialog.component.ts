@@ -546,6 +546,9 @@ export class WorkflowDetailsDialogComponent implements OnInit {
     if (Array.isArray(definition.steps)) {
       return definition.steps.length;
     }
+    if (definition.steps && typeof definition.steps === 'object') {
+      return Object.keys(definition.steps).length;
+    }
     if (Array.isArray(definition.nodes)) {
       return definition.nodes.length;
     }
