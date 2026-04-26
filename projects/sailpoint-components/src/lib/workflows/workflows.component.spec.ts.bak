@@ -1,0 +1,174 @@
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { WorkflowsComponent } from './workflows.component';
+import { SailPointSDKService } from '../sailpoint-sdk.service';
+import { MatSnackBar } from '@angular/material/snack-bar';
+
+describe('WorkflowsComponent', () => {
+  let component: WorkflowsComponent;
+  let fixture: ComponentFixture<WorkflowsComponent>;
+  let mockSDKService: jasmine.SpyObj<SailPointSDKService>;
+  let mockSnackBar: jasmine.SpyObj<MatSnackBar>;
+
+  const mockWorkflows = [
+    {
+      id: 'd201c5e9-d37b-4aff-af14-66414f39d569',
+      name: 'Send Email',
+      description: 'Send an email to the identity who\'s attributes changed.',
+      enabled: false,
+      executionCount: 2,
+      failureCount: 0,
+      created: '2022-01-10T16:06:16.636381447Z',
+      modified: '2023-12-05T15:18:27.699132301Z'
+    },
+    {
+      id: 'c17bea3a-574d-453c-9e04-4365fbf5af0b',
+      name: 'Create Ticket',
+      description: 'Create a ticket when workflow triggers.',
+      enabled: true,
+      executionCount: 5,
+      failureCount: 1,
+      created: '2022-02-10T16:06:16.636381447Z',
+      modified: '2023-12-06T15:18:27.699132301Z'
+    }
+  ];
+
+  beforeEach(async () => {
+    mockSDKService = jasmine.createSpyObj('SailPointSDKService', [
+      'listWorkflows',
+      'getWorkflow',
+      'deleteWorkflow',
+      'patchWorkflow',
+      'testWorkflow'
+    ]);
+    
+    mockSnackBar = jasmine.createSpyObj('MatSnackBar', ['open']);
+
+    mockSDKService.listWorkflows.and.returnValue(Promise.resolve({ data: mockWorkflows }));
+
+    await TestBed.configureTestingModule({
+      imports: [WorkflowsComponent],
+      providers: [
+        { provide: SailPointSDKService, useValue: mockSDKService },
+        { provide: MatSnackBar, useValue: mockSnackBar }
+      ]
+    })
+    .compileComponents();
+
+    fixture = TestBed.createComponent(WorkflowsComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+  });
+
+  it('should create', () => {
+    expect(component).toBeTruthy();
+  });
+
+  it('should have correct title', () => {
+    expect(component.title).toBe('Workflow Executions');
+  });
+
+  it('should load workflows on init', async () => {
+    await component.ngOnInit();
+    expect(mockSDKService.listWorkflows).toHaveBeenCalled();
+    expect(component.dataSource.data.length).toBe(2);
+  });
+
+  it('should handle workflow list response with data property', async () => {
+    mockSDKService.listWorkflows.and.returnValue(Promise.resolve({ data: mockWorkflows }));
+    await component.loadWorkflows();
+    expect(component.dataSource.data).toEqual(mockWorkflows);
+    expect(component.error).toBe(false);
+  });
+
+  it('should handle workflow list response as array', async () => {
+    mockSDKService.listWorkflows.and.returnValue(Promise.resolve(mockWorkflows));
+    await component.loadWorkflows();
+    expect(component.dataSource.data).toEqual(mockWorkflows);
+  });
+
+  it('should handle empty workflow list', async () => {
+    mockSDKService.listWorkflows.and.returnValue(Promise.resolve({ data: [] }));
+    await component.loadWorkflows();
+    expect(component.dataSource.data.length).toBe(0);
+  });
+
+  it('should handle error when loading workflows', async () => {
+    mockSDKService.listWorkflows.and.returnValue(Promise.reject({ message: 'Network error' }));
+    await component.loadWorkflows();
+    expect(component.error).toBe(true);
+    expect(component.errorMessage).toContain('Network error');
+  });
+
+  it('should apply filter correctly', () => {
+    component.dataSource.data = mockWorkflows;
+    const event = new Event('keyup');
+    const input = document.createElement('input');
+    input.value = 'Send';
+    Object.defineProperty(event, 'target', { value: input });
+    
+    component.applyFilter(event);
+    expect(component.dataSource.filter).toBe('Send');
+  });
+
+  it('should toggle workflow selection', () => {
+    const workflowId = mockWorkflows[0].id;
+    expect(component.isSelected(workflowId)).toBe(false);
+    
+    component.toggleSelection(workflowId);
+    expect(component.isSelected(workflowId)).toBe(true);
+    
+    component.toggleSelection(workflowId);
+    expect(component.isSelected(workflowId)).toBe(false);
+  });
+
+  it('should delete single workflow', async () => {
+    spyOn(window, 'confirm').and.returnValue(true);
+    mockSDKService.deleteWorkflow.and.returnValue(Promise.resolve({}));
+    
+    await component.deleteWorkflow(mockWorkflows[0].id, mockWorkflows[0].name);
+    
+    expect(mockSDKService.deleteWorkflow).toHaveBeenCalledWith({ id: mockWorkflows[0].id });
+  });
+
+  it('should handle delete workflow error', async () => {
+    spyOn(window, 'confirm').and.returnValue(true);
+    mockSDKService.deleteWorkflow.and.returnValue(Promise.reject({ response: { data: { message: 'Delete failed' } } }));
+    
+    await component.deleteWorkflow(mockWorkflows[0].id, mockWorkflows[0].name);
+    
+    expect(mockSnackBar.open).toHaveBeenCalled();
+  });
+
+  it('should get correct status label', () => {
+    expect(component.getStatusLabel(true)).toBe('Enabled');
+    expect(component.getStatusLabel(false)).toBe('Disabled');
+  });
+
+  it('should have correct displayed columns', () => {
+    const expectedColumns = ['select', 'name', 'description', 'enabled', 'executionCount', 'actions'];
+    expect(component.displayedColumns).toEqual(expectedColumns);
+  });
+
+  it('should handle bulk delete with confirmation', async () => {
+    spyOn(window, 'confirm').and.returnValue(true);
+    mockSDKService.deleteWorkflow.and.returnValue(Promise.resolve({}));
+    
+    component.selectedWorkflows.add(mockWorkflows[0].id);
+    component.selectedWorkflows.add(mockWorkflows[1].id);
+    
+    await component.bulkDelete();
+    
+    expect(mockSDKService.deleteWorkflow).toHaveBeenCalledTimes(2);
+    expect(component.selectedWorkflows.size).toBe(0);
+  });
+
+  it('should not bulk delete without confirmation', async () => {
+    spyOn(window, 'confirm').and.returnValue(false);
+    
+    component.selectedWorkflows.add(mockWorkflows[0].id);
+    await component.bulkDelete();
+    
+    expect(mockSDKService.deleteWorkflow).not.toHaveBeenCalled();
+    expect(component.selectedWorkflows.size).toBe(1);
+  });
+});

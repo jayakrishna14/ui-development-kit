@@ -150,6 +150,14 @@ export class ConfigService {
             icon: 'dashboard',
             description: 'Manage saas connectivity creator in SailPoint.',
             enabled: false
+        },
+        {
+            name: 'workflows',
+            displayName: 'Workflows',
+            route: '/workflows',
+            icon: 'dashboard',
+            description: 'Manage workflows in SailPoint.',
+            enabled: false
         }
     ];
 

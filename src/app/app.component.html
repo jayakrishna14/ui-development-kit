@@ -204,6 +204,13 @@
             Saas Connectivity Creator
           </a>
         }
+        @if (isComponentEnabled('workflows')) {
+          <a mat-list-item class="sidebar-link" routerLink="/workflows" routerLinkActive="active-link"
+            [class.disabled]="!isConnected" (click)="onNavItemClick($event)">
+            <mat-icon class="card-icon">dashboard</mat-icon>
+            Workflows
+          </a>
+        }
       </mat-nav-list>
     </mat-sidenav>
   }

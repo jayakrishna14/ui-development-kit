@@ -14,8 +14,7 @@ out
 
 # dependencies
 node_modules
-package-lock.json
-*/package-lock.json
+
 
 # build cache
 .nx/cache

@@ -34,3 +34,4 @@ export * from './lib/colab/services/discourse.service';
 
 
 export * from './lib/saas-connectivity-creator/saas-connectivity-creator.component';
+export * from './lib/workflows/workflows.component';
