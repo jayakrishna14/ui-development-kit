@@ -2,13 +2,15 @@
   height: 100%;
   display: flex;
   flex-direction: column;
-  background-color: #f5f5f5;
+  background:
+    radial-gradient(circle at top left, rgba(20, 184, 166, 0.14), transparent 30%),
+    linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%);
 }
 
 mat-toolbar {
   flex-shrink: 0;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.14);
-  background: linear-gradient(135deg, #3f51b5 0%, #5c6bc0 100%);
+  background: linear-gradient(135deg, #172554 0%, #2563eb 48%, #14b8a6 100%);
   color: white;
   min-height: 72px;
   padding: 0 24px;
@@ -47,6 +49,19 @@ mat-toolbar {
     color: white;
   }
 
+  .create-action {
+    background: #ffffff;
+    color: #155e75;
+    font-weight: 800;
+  }
+
+  .import-action {
+    background: rgba(255, 255, 255, 0.18);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    font-weight: 800;
+  }
+
   .mat-icon {
     color: white;
   }
@@ -61,15 +76,14 @@ mat-toolbar {
 mat-card {
   width: 100%;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);
-  border-radius: 20px;
+  border-radius: 16px;
   overflow: hidden;
 }
 
 .controls-card,
-.table-card,
-.response-card {
+.table-card {
   background: #ffffff;
-  border-radius: 20px;
+  border-radius: 16px;
   margin-bottom: 20px;
   padding: 20px;
 }
@@ -126,6 +140,15 @@ mat-card {
   gap: 8px;
 }
 
+.column-list mat-checkbox {
+  background: linear-gradient(135deg, #ecfeff, #eef2ff);
+  border: 1px solid #c7d2fe;
+  border-radius: 999px;
+  padding: 4px 10px;
+  color: #312e81;
+  font-weight: 700;
+}
+
 .summary-pill {
   display: flex;
   flex-wrap: wrap;
@@ -135,9 +158,11 @@ mat-card {
 }
 
 .summary-pill span {
-  background: #eceff1;
+  background: linear-gradient(135deg, #dbeafe, #ccfbf1);
+  color: #164e63;
   padding: 8px 12px;
   border-radius: 999px;
+  font-weight: 800;
 }
 
 .table-card {
@@ -162,41 +187,6 @@ mat-card {
   margin: 4px 0 0;
   color: #616161;
   font-size: 14px;
-}
-
-.response-card {
-  background: #263238;
-  color: #ffffff;
-}
-
-.response-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
-  margin-bottom: 16px;
-}
-
-.response-header h4 {
-  margin: 0;
-  font-size: 16px;
-  color: #ffffff;
-}
-
-.response-header p {
-  margin: 4px 0 0;
-  color: rgba(255, 255, 255, 0.75);
-  font-size: 13px;
-}
-
-.status-chip {
-  background: rgba(255, 255, 255, 0.12);
-  color: #ffffff;
-  padding: 8px 14px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
 }
 
 .json-view {
@@ -227,10 +217,12 @@ mat-card-content {
     }
 
     th {
-      background-color: #f9f9f9;
-      font-weight: 600;
-      color: #333;
-      border-bottom: 2px solid #e0e0e0;
+      background: linear-gradient(135deg, #172554, #334155);
+      font-weight: 800;
+      color: #fff;
+      border-bottom: 0;
+      text-transform: uppercase;
+      font-size: 12px;
 
       &.select-column {
         width: 48px;
@@ -239,10 +231,10 @@ mat-card-content {
     }
 
     tr {
-      border-bottom: 1px solid #e0e0e0;
+      border-bottom: 1px solid #e2e8f0;
       
       &:hover {
-        background-color: #fafafa;
+        background-color: #f0fdfa;
       }
 
       &.mat-header-row {
@@ -253,11 +245,30 @@ mat-card-content {
     }
 
     td {
+      color: #334155;
+
       &.select-column {
         text-align: center;
       }
     }
+
+    tr:nth-child(even) td {
+      background: #f8fafc;
+    }
+
+    tr:nth-child(odd) td {
+      background: #ffffff;
+    }
   }
+}
+
+.workflows-table strong {
+  color: #0f172a;
+  background: linear-gradient(135deg, #e0f2fe, #ede9fe);
+  border-radius: 999px;
+  padding: 6px 10px;
+  display: inline-flex;
+  max-width: 320px;
 }
 
 .status-badge {
@@ -278,14 +289,26 @@ mat-card-content {
   }
 
   &.status-enabled {
-    background-color: #e8f5e9;
-    color: #2e7d32;
+    background: #dcfce7;
+    color: #166534;
   }
 
   &.status-disabled {
-    background-color: #ffebee;
-    color: #c62828;
+    background: #fee2e2;
+    color: #991b1b;
   }
+}
+
+.danger-action {
+  color: #b91c1c;
+  background: #fee2e2;
+  border: 1px solid #fecaca;
+  box-shadow: 0 8px 18px rgba(220, 38, 38, 0.18);
+}
+
+.danger-action:hover {
+  color: #ffffff;
+  background: linear-gradient(135deg, #ef4444, #991b1b);
 }
 
 .failure-count {

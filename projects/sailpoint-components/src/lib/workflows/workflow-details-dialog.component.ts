@@ -30,6 +30,10 @@ import { SailPointSDKService } from '../sailpoint-sdk.service';
     <div class="dialog-container">
       <div class="dialog-header">
         <h2 mat-dialog-title>{{ data?.name || 'Workflow Details' }}</h2>
+        <button mat-stroked-button (click)="loadWorkflow()" [disabled]="loading || !data?.id">
+          <mat-icon>sync</mat-icon>
+          Refresh detail
+        </button>
       </div>
 
       <mat-tab-group>
@@ -136,8 +140,8 @@ import { SailPointSDKService } from '../sailpoint-sdk.service';
           </ng-template>
           
           <div class="tab-content">
-            <div *ngIf="!editMode" class="json-view">
-              <pre>{{ jsonText }}</pre>
+            <div *ngIf="!editMode" class="json-tree">
+              <ng-container *ngTemplateOutlet="jsonNode; context: { value: data, keyName: '', depth: 0 }"></ng-container>
             </div>
 
             <div *ngIf="editMode" class="json-edit">
@@ -154,7 +158,12 @@ import { SailPointSDKService } from '../sailpoint-sdk.service';
           </ng-template>
           
           <div class="tab-content">
-            <pre class="json-view">{{ (data?.definition | json) || 'No definition available' }}</pre>
+            <div class="json-tree" *ngIf="data?.definition; else noDefinition">
+              <ng-container *ngTemplateOutlet="jsonNode; context: { value: data.definition, keyName: 'definition', depth: 0 }"></ng-container>
+            </div>
+            <ng-template #noDefinition>
+              <div class="empty-panel">No definition available</div>
+            </ng-template>
           </div>
         </mat-tab>
 
@@ -186,32 +195,88 @@ import { SailPointSDKService } from '../sailpoint-sdk.service';
             </div>
           </div>
         </mat-tab>
+
+        <!-- EXECUTIONS TAB -->
+        <mat-tab label="Executions">
+          <ng-template mat-tab-label>
+            <mat-icon class="tab-icon">history</mat-icon>
+            Executions
+          </ng-template>
+
+          <div class="tab-content executions-tab">
+            <div class="execution-toolbar">
+              <button mat-raised-button color="primary" (click)="loadExecutions()" [disabled]="loading">
+                <mat-icon>sync</mat-icon>
+                Load executions
+              </button>
+              <mat-form-field appearance="outline">
+                <mat-label>Status filter</mat-label>
+                <input matInput [(ngModel)]="executionFilter" placeholder='status eq "Failed"'>
+              </mat-form-field>
+            </div>
+
+            <div class="execution-list" *ngIf="executions.length > 0">
+              <button class="execution-row"
+                      *ngFor="let execution of executions"
+                      (click)="loadExecutionDetails(execution.id)"
+                      [class.active]="selectedExecutionId === execution.id">
+                <span class="execution-status">{{ execution.status || 'Unknown' }}</span>
+                <span>{{ execution.startTime || execution.created || execution.id }}</span>
+                <mat-icon>chevron_right</mat-icon>
+              </button>
+            </div>
+
+            <div class="empty-panel" *ngIf="executions.length === 0 && !loading">
+              No executions loaded
+            </div>
+
+            <div class="execution-detail-grid" *ngIf="executionDetails">
+              <section>
+                <h3>Execution</h3>
+                <div class="json-tree">
+                  <ng-container *ngTemplateOutlet="jsonNode; context: { value: executionDetails, keyName: 'execution', depth: 0 }"></ng-container>
+                </div>
+              </section>
+
+              <section>
+                <div class="section-title-row">
+                  <h3>History</h3>
+                  <button mat-stroked-button (click)="loadExecutionHistory(selectedExecutionId)" [disabled]="!selectedExecutionId || loading">
+                    <mat-icon>timeline</mat-icon>
+                    Load history
+                  </button>
+                </div>
+                <div class="json-tree" *ngIf="executionHistory">
+                  <ng-container *ngTemplateOutlet="jsonNode; context: { value: executionHistory, keyName: 'history', depth: 0 }"></ng-container>
+                </div>
+              </section>
+            </div>
+          </div>
+        </mat-tab>
       </mat-tab-group>
 
-      <div *ngIf="executionDetails">
+      <ng-template #jsonNode let-value="value" let-keyName="keyName" let-depth="depth">
+        <details *ngIf="isExpandable(value); else primitiveNode" class="json-node" [open]="depth < 2">
+          <summary>
+            <span class="json-key" *ngIf="keyName">{{ keyName }}:</span>
+            <span class="json-brace">{{ isArray(value) ? '[' : '{' }}</span>
+            <span class="json-muted">{{ getNodeSummary(value) }}</span>
+          </summary>
+          <div class="json-children">
+            <div *ngFor="let key of getObjectKeys(value)" class="json-line">
+              <ng-container *ngTemplateOutlet="jsonNode; context: { value: value[key], keyName: key, depth: depth + 1 }"></ng-container>
+            </div>
+          </div>
+          <span class="json-brace">{{ isArray(value) ? ']' : '}' }}</span>
+        </details>
+        <ng-template #primitiveNode>
+          <div class="json-leaf">
+            <span class="json-key" *ngIf="keyName">{{ keyName }}:</span>
+            <span [ngClass]="getPrimitiveClass(value)">{{ formatPrimitive(value) }}</span>
+          </div>
+        </ng-template>
+      </ng-template>
 
-  <h3>Execution Details</h3>
-
-  <pre class="json-view">{{ executionDetails | json }}</pre>
-
-  <h3>Steps</h3>
-
-  <div *ngFor="let step of executionDetails?.steps">
-
-    <div class="step-box">
-      <strong>{{ step.name }}</strong> - {{ step.status }}
-
-      <div><b>Input:</b></div>
-      <pre>{{ step.input | json }}</pre>
-
-      <div><b>Output:</b></div>
-      <pre>{{ step.output | json }}</pre>
-
-    </div>
-
-  </div>
-
-</div>
       <div class="dialog-actions">
         <button mat-button (click)="toggleEdit()" [disabled]="loading">
           {{ editMode ? 'Cancel' : 'Edit' }}
@@ -249,6 +314,10 @@ import { SailPointSDKService } from '../sailpoint-sdk.service';
       padding: 20px;
       border-bottom: 1px solid #e0e0e0;
       flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
 
       h2 {
         margin: 0;
@@ -343,6 +412,92 @@ import { SailPointSDKService } from '../sailpoint-sdk.service';
       }
     }
 
+    .json-tree {
+      background: #0f172a;
+      color: #dbeafe;
+      border: 1px solid #1e293b;
+      border-radius: 14px;
+      padding: 16px;
+      overflow: auto;
+      font-family: Consolas, 'Courier New', monospace;
+      font-size: 12px;
+      line-height: 1.55;
+      max-height: 56vh;
+    }
+
+    .json-node {
+      margin: 2px 0;
+
+      summary {
+        cursor: pointer;
+        list-style: none;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: 8px;
+        padding: 2px 4px;
+      }
+
+      summary::-webkit-details-marker {
+        display: none;
+      }
+
+      summary::before {
+        content: 'chevron_right';
+        font-family: 'Material Icons';
+        color: #38bdf8;
+        font-size: 16px;
+      }
+
+      &[open] > summary::before {
+        content: 'expand_more';
+      }
+
+      summary:hover {
+        background: rgba(14, 165, 233, 0.16);
+      }
+    }
+
+    .json-children {
+      margin-left: 22px;
+      padding-left: 12px;
+      border-left: 1px solid rgba(148, 163, 184, 0.35);
+    }
+
+    .json-key {
+      color: #67e8f9;
+      font-weight: 700;
+    }
+
+    .json-brace,
+    .json-muted {
+      color: #94a3b8;
+    }
+
+    .json-string {
+      color: #bbf7d0;
+    }
+
+    .json-number,
+    .json-boolean {
+      color: #fcd34d;
+    }
+
+    .json-null {
+      color: #fda4af;
+    }
+
+    .json-leaf {
+      display: flex;
+      gap: 6px;
+      padding: 2px 4px;
+      border-radius: 8px;
+    }
+
+    .json-leaf:hover {
+      background: rgba(14, 165, 233, 0.12);
+    }
+
     .json-edit {
       width: 100%;
 
@@ -357,6 +512,82 @@ import { SailPointSDKService } from '../sailpoint-sdk.service';
         border-radius: 4px;
         resize: vertical;
       }
+    }
+
+    .executions-tab {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .execution-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+
+      mat-form-field {
+        flex: 1 1 260px;
+      }
+    }
+
+    .execution-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .execution-row {
+      width: 100%;
+      border: 1px solid #dbeafe;
+      background: linear-gradient(135deg, #eff6ff, #f0fdfa);
+      color: #0f172a;
+      border-radius: 12px;
+      padding: 10px 12px;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 10px;
+      align-items: center;
+      text-align: left;
+      cursor: pointer;
+      font: inherit;
+    }
+
+    .execution-row.active {
+      border-color: #2563eb;
+      box-shadow: 0 10px 24px rgba(37, 99, 235, 0.16);
+    }
+
+    .execution-status {
+      background: #dbeafe;
+      color: #1e40af;
+      border-radius: 999px;
+      padding: 5px 9px;
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .execution-detail-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 16px;
+    }
+
+    .section-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .empty-panel {
+      background: #f8fafc;
+      color: #64748b;
+      border: 1px dashed #cbd5e1;
+      border-radius: 12px;
+      padding: 18px;
+      text-align: center;
+      font-weight: 700;
     }
 
     .dialog-actions {
@@ -393,6 +624,10 @@ export class WorkflowDetailsDialogComponent implements OnInit {
   jsonText = '';
   editData: any = {};
   executionDetails: any = null;
+  executionHistory: any = null;
+  executions: any[] = [];
+  selectedExecutionId = '';
+  executionFilter = '';
   testResult: any = null;
   testInputText = `{
   "input": {}
@@ -411,6 +646,27 @@ export class WorkflowDetailsDialogComponent implements OnInit {
   ngOnInit(): void {
     this.editData = JSON.parse(JSON.stringify(this.data));
     this.jsonText = JSON.stringify(this.data, null, 2);
+    this.loadWorkflow();
+  }
+
+  async loadWorkflow(): Promise<void> {
+    if (!this.data?.id) {
+      return;
+    }
+
+    this.loading = true;
+    try {
+      const res = await this.sdk.getWorkflow({ id: this.data.id });
+      this.data = res?.data || res;
+      this.editData = JSON.parse(JSON.stringify(this.data));
+      this.jsonText = JSON.stringify(this.data, null, 2);
+    } catch (e: any) {
+      const errorMessage = e?.response?.data?.message || e?.message || 'Failed to load workflow details';
+      this.showMessage(errorMessage, 'error');
+      console.error('Workflow detail load failed:', e);
+    } finally {
+      this.loading = false;
+    }
   }
 
   toggleEdit(): void {
@@ -431,11 +687,19 @@ export class WorkflowDetailsDialogComponent implements OnInit {
     this.loading = true;
 
     try {
+      const jsonChanged = this.jsonText !== JSON.stringify(this.editData, null, 2);
       let updateData = this.editData;
 
-      // If editing JSON directly, parse it
-      if (this.jsonText !== JSON.stringify(this.editData, null, 2)) {
+      if (jsonChanged) {
         updateData = JSON.parse(this.jsonText);
+        await this.sdk.putWorkflow({
+          id: this.data.id,
+          workflowBodyV2025: this.cleanWorkflowBody(updateData)
+        });
+        this.showMessage('Workflow updated successfully', 'success');
+        this.editMode = false;
+        this.dialogRef.close({ action: 'saved' });
+        return;
       }
 
       const patchOps: any[] = [];
@@ -486,9 +750,7 @@ export class WorkflowDetailsDialogComponent implements OnInit {
 
       const result = await this.sdk.testWorkflow({
         id: this.data.id,
-        testWorkflowRequestV2025: {
-          input: payload
-        }
+        testWorkflowRequestV2025: payload?.input ? payload : { input: payload }
       });
 
       this.testResult = result?.data || result;
@@ -525,6 +787,11 @@ export class WorkflowDetailsDialogComponent implements OnInit {
   }
   
   async loadExecutionDetails(executionId: string): Promise<void> {
+    if (!executionId) {
+      return;
+    }
+    this.selectedExecutionId = executionId;
+    this.executionHistory = null;
     try {
       const res = await (this.sdk as any).getWorkflowExecution({
         id: executionId
@@ -535,6 +802,89 @@ export class WorkflowDetailsDialogComponent implements OnInit {
     } catch (e) {
       console.error('Execution details failed', e);
     }
+  }
+
+  async loadExecutions(): Promise<void> {
+    if (!this.data?.id) {
+      this.showMessage('Cannot load executions: workflow ID is missing', 'error');
+      return;
+    }
+
+    this.loading = true;
+    try {
+      const res = await this.sdk.getWorkflowExecutions({
+        id: this.data.id,
+        limit: 250,
+        offset: 0,
+        filters: this.executionFilter.trim() || undefined
+      });
+      const payload = res?.data || res;
+      this.executions = Array.isArray(payload) ? payload : [];
+      if (this.executions.length === 0) {
+        this.showMessage('No executions found', 'info');
+      }
+    } catch (e: any) {
+      const errorMessage = e?.response?.data?.message || e?.message || 'Failed to load executions';
+      this.showMessage(errorMessage, 'error');
+      console.error('Executions load failed:', e);
+    } finally {
+      this.loading = false;
+    }
+  }
+
+  async loadExecutionHistory(executionId: string): Promise<void> {
+    if (!executionId) {
+      return;
+    }
+
+    this.loading = true;
+    try {
+      const res = await this.sdk.getWorkflowExecutionHistory({ id: executionId });
+      this.executionHistory = res?.data || res;
+    } catch (e: any) {
+      const errorMessage = e?.response?.data?.message || e?.message || 'Failed to load execution history';
+      this.showMessage(errorMessage, 'error');
+      console.error('Execution history failed:', e);
+    } finally {
+      this.loading = false;
+    }
+  }
+
+  isExpandable(value: any): boolean {
+    return value !== null && typeof value === 'object';
+  }
+
+  isArray(value: any): boolean {
+    return Array.isArray(value);
+  }
+
+  getObjectKeys(value: any): string[] {
+    if (!this.isExpandable(value)) {
+      return [];
+    }
+    return Object.keys(value);
+  }
+
+  getNodeSummary(value: any): string {
+    const count = this.getObjectKeys(value).length;
+    return Array.isArray(value) ? `${count} item${count === 1 ? '' : 's'}` : `${count} field${count === 1 ? '' : 's'}`;
+  }
+
+  formatPrimitive(value: any): string {
+    if (value === null || value === undefined) {
+      return 'null';
+    }
+    if (typeof value === 'string') {
+      return `"${value}"`;
+    }
+    return String(value);
+  }
+
+  getPrimitiveClass(value: any): string {
+    if (value === null || value === undefined) {
+      return 'json-null';
+    }
+    return `json-${typeof value}`;
   }
 
   getStepCount(workflow: any): number {
@@ -570,6 +920,11 @@ export class WorkflowDetailsDialogComponent implements OnInit {
     } catch {
       return '—';
     }
+  }
+
+  private cleanWorkflowBody(workflow: any): any {
+    const { id, created, modified, modifiedBy, creator, executionCount, failureCount, ...body } = workflow;
+    return body;
   }
 
 }

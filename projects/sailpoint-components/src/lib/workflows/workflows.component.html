@@ -10,6 +10,15 @@
     </div>
 
     <div class="toolbar-actions">
+      <button mat-raised-button class="create-action" (click)="createWorkflow()" [disabled]="loading">
+        <mat-icon>add_circle</mat-icon>
+        Create
+      </button>
+      <button mat-raised-button class="import-action" (click)="workflowImport.click()" [disabled]="loading">
+        <mat-icon>upload_file</mat-icon>
+        Import JSON
+      </button>
+      <input #workflowImport type="file" accept=".json,application/json" hidden (change)="importWorkflow($event)">
       <button mat-icon-button (click)="loadWorkflows()" [disabled]="loading" matTooltip="Refresh workflows">
         <mat-icon>refresh</mat-icon>
       </button>
@@ -162,7 +171,7 @@
                 <button mat-icon-button (click)="viewWorkflow(w)" matTooltip="View details">
                   <mat-icon>visibility</mat-icon>
                 </button>
-                <button mat-icon-button color="warn" (click)="deleteWorkflow(w.id, w.name)" matTooltip="Delete workflow">
+                <button mat-icon-button class="danger-action" (click)="deleteWorkflow(w.id, w.name)" matTooltip="High risk: delete workflow">
                   <mat-icon>delete</mat-icon>
                 </button>
               </td>
@@ -184,20 +193,14 @@
           showFirstLastButtons 
           aria-label="Select page of workflows">
         </mat-paginator>
-
-        <div *ngIf="dataSource.data.length === 0 && !loading" class="empty-state">
-          <mat-icon>workflow</mat-icon>
-          <h3>No Workflows Found</h3>
-          <p>There are no workflows to display. Create a new workflow to get started.</p>
-        </div>
-
         </mat-card-content>
-        <mat-paginator 
-          [pageSizeOptions]="[5, 10, 20, 50]" 
-          showFirstLastButtons 
-          aria-label="Select page of workflows">
-        </mat-paginator>
       </mat-card>
+
+      <div *ngIf="dataSource.data.length === 0 && !loading" class="empty-state">
+        <mat-icon>workflow</mat-icon>
+        <h3>No Workflows Found</h3>
+        <p>There are no workflows to display. Create a new workflow to get started.</p>
+      </div>
 
   </div>
 </div>

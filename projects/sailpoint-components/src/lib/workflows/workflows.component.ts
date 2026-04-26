@@ -17,6 +17,8 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 
 import { SailPointSDKService } from '../sailpoint-sdk.service';
 import { WorkflowDetailsDialogComponent } from './workflow-details-dialog.component';
+import { WorkflowJsonDialogComponent } from './workflow-json-dialog.component';
+import { WorkflowDeleteDialogComponent } from './workflow-delete-dialog.component';
 
 @Component({
   selector: 'app-workflows',
@@ -37,7 +39,9 @@ import { WorkflowDetailsDialogComponent } from './workflow-details-dialog.compon
     MatProgressSpinnerModule,
     MatTooltipModule,
     MatSnackBarModule,
-    WorkflowDetailsDialogComponent
+    WorkflowDetailsDialogComponent,
+    WorkflowJsonDialogComponent,
+    WorkflowDeleteDialogComponent
   ],
   templateUrl: './workflows.component.html',
   styleUrl: './workflows.component.scss'
@@ -56,9 +60,6 @@ export class WorkflowsComponent implements OnInit, AfterViewInit {
   loading = false;
   error = false;
   errorMessage = '';
-
-  lastApiAction = '';
-  lastApiResponse: any = null;
 
   @ViewChild(MatSort) sort!: MatSort;
   @ViewChild(MatPaginator) paginator!: MatPaginator;
@@ -219,21 +220,23 @@ export class WorkflowsComponent implements OnInit, AfterViewInit {
   }
 
   async deleteWorkflow(id: string, name: string): Promise<void> {
-    const confirmed = confirm(`Are you sure you want to delete workflow "${name}"? This action cannot be undone.`);
+    const confirmed = await this.confirmDelete({
+      title: 'Delete workflow',
+      message: `Delete "${name}"? This action cannot be undone.`,
+      detail: 'Enabled workflows cannot be deleted. Disable first if this request fails.'
+    });
     if (!confirmed) {
       return;
     }
 
     this.loading = true;
     try {
-      const res = await this.sdk.deleteWorkflow({ id });
+      await this.sdk.deleteWorkflow({ id });
       this.showMessage(`Workflow "${name}" deleted successfully`, 'success');
-      this.setLastApiResponse('Delete workflow', res);
       await this.loadWorkflows();
     } catch (err: any) {
       const message = err?.response?.data?.message || 'Failed to delete workflow';
       this.showMessage(message, 'error');
-      this.setLastApiResponse('Delete workflow', err?.response || err);
       console.error('Error deleting workflow:', err);
     } finally {
       this.loading = false;
@@ -246,9 +249,11 @@ export class WorkflowsComponent implements OnInit, AfterViewInit {
       return;
     }
 
-    const confirmed = confirm(
-      `Delete ${this.selectedWorkflows.size} workflow(s)? This action cannot be undone.`
-    );
+    const confirmed = await this.confirmDelete({
+      title: 'Delete selected workflows',
+      message: `Delete ${this.selectedWorkflows.size} selected workflow(s)? This action cannot be undone.`,
+      detail: 'This is a high-risk operation and each selected workflow will be deleted.'
+    });
     if (!confirmed) {
       return;
     }
@@ -256,25 +261,21 @@ export class WorkflowsComponent implements OnInit, AfterViewInit {
     this.loading = true;
     let successCount = 0;
     let failureCount = 0;
-    const responses: any[] = [];
 
     try {
       const deletePromises = Array.from(this.selectedWorkflows).map(id =>
         this.sdk.deleteWorkflow({ id })
-          .then(res => {
+          .then(() => {
             successCount++;
-            responses.push({ id, status: 'deleted', response: res });
           })
           .catch(err => {
             failureCount++;
-            responses.push({ id, status: 'failed', error: err });
             console.error(`Failed to delete workflow ${id}:`, err);
           })
       );
 
       await Promise.all(deletePromises);
       this.selectedWorkflows.clear();
-      this.setLastApiResponse('Bulk delete workflows', { successCount, failureCount, items: responses });
 
       if (successCount > 0) {
         this.showMessage(
@@ -286,8 +287,72 @@ export class WorkflowsComponent implements OnInit, AfterViewInit {
       await this.loadWorkflows();
     } catch (err: any) {
       this.showMessage('Failed to delete workflows', 'error');
-      this.setLastApiResponse('Bulk delete workflows', err?.response || err);
       console.error('Error in bulk delete:', err);
+    } finally {
+      this.loading = false;
+    }
+  }
+
+  createWorkflow(): void {
+    this.openWorkflowJsonDialog({
+      title: 'Create workflow',
+      subtitle: 'Paste or edit a workflow JSON body, then create it in the tenant.',
+      actionLabel: 'Create workflow',
+      actionIcon: 'add_circle',
+      icon: 'add_circle',
+      jsonText: JSON.stringify(this.getStarterWorkflow(), null, 2)
+    });
+  }
+
+  importWorkflow(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) {
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      this.openWorkflowJsonDialog({
+        title: 'Import workflow JSON',
+        subtitle: 'Review the imported JSON before creating a new workflow.',
+        actionLabel: 'Import workflow',
+        actionIcon: 'upload_file',
+        icon: 'upload_file',
+        jsonText: String(reader.result || '')
+      });
+    };
+    reader.onerror = () => this.showMessage('Failed to read workflow JSON file', 'error');
+    reader.readAsText(file);
+  }
+
+  private openWorkflowJsonDialog(data: any): void {
+    const dialogRef = this.dialog.open(WorkflowJsonDialogComponent, {
+      width: '900px',
+      maxHeight: '92vh',
+      data
+    });
+
+    dialogRef.afterClosed().subscribe(async workflow => {
+      if (!workflow) {
+        return;
+      }
+      await this.createWorkflowFromBody(workflow);
+    });
+  }
+
+  private async createWorkflowFromBody(workflow: any): Promise<void> {
+    this.loading = true;
+    try {
+      const body = this.cleanWorkflowForCreate(workflow);
+      await this.sdk.createWorkflow({ createWorkflowRequestV2025: body });
+      this.showMessage(`Workflow "${body.name || 'new workflow'}" created`, 'success');
+      await this.loadWorkflows();
+    } catch (err: any) {
+      const message = err?.response?.data?.message || err?.message || 'Failed to create workflow';
+      this.showMessage(message, 'error');
+      console.error('Create workflow failed:', err);
     } finally {
       this.loading = false;
     }
@@ -344,6 +409,16 @@ export class WorkflowsComponent implements OnInit, AfterViewInit {
       && Array.isArray((value as { items?: unknown }).items);
   }
 
+  private confirmDelete(data: any): Promise<boolean> {
+    const dialogRef = this.dialog.open(WorkflowDeleteDialogComponent, {
+      width: '500px',
+      data
+    });
+    return new Promise(resolve => {
+      dialogRef.afterClosed().subscribe(result => resolve(result === true));
+    });
+  }
+
   private getTriggerAttributes(workflow: any): any {
     const trigger = workflow?.trigger;
     return trigger?.EVENT?.attributes
@@ -380,6 +455,36 @@ export class WorkflowsComponent implements OnInit, AfterViewInit {
         : [];
   }
 
+  private cleanWorkflowForCreate(workflow: any): any {
+    const { id, created, modified, modifiedBy, creator, executionCount, failureCount, ...body } = workflow;
+    return {
+      ...body,
+      enabled: body.enabled === true ? false : body.enabled
+    };
+  }
+
+  private getStarterWorkflow(): any {
+    return {
+      name: 'New Workflow',
+      description: 'Describe what this workflow does.',
+      definition: {
+        start: 'success',
+        steps: {
+          success: {
+            type: 'success'
+          }
+        }
+      },
+      enabled: false,
+      trigger: {
+        type: 'EVENT',
+        attributes: {
+          id: 'idn:identity-attributes-changed'
+        }
+      }
+    };
+  }
+
   toggleColumn(column: string): void {
     if (this.selectedColumns.has(column)) {
       this.selectedColumns.delete(column);
@@ -407,21 +512,4 @@ export class WorkflowsComponent implements OnInit, AfterViewInit {
     return mapping[column] || column;
   }
 
-  private setLastApiResponse(action: string, response: any): void {
-    const payload = response?.data ?? response;
-    const status = response?.status ?? (response?.message ? 'error' : 'unknown');
-
-    this.lastApiAction = action;
-    this.lastApiResponse = {
-      action,
-      status,
-      timestamp: new Date(),
-      payload,
-      request: response?.config ? {
-        url: response.config.url,
-        method: response.config.method,
-        status
-      } : undefined
-    };
-  }
 }
