@@ -46,15 +46,15 @@ export class WorkflowsComponent implements OnInit, AfterViewInit {
 
   title = 'Workflow Executions';
 
-  displayedColumns: string[] = ['select', 'name', 'description', 'enabled', 'executionCount', 'actions'];
-  dataSource = new MatTableDataSource<any>([]);
+displayedColumns: string[] = ['select', 'name', 'type', 'description', 'enabled', 'executionCount', 'actions'];  dataSource = new MatTableDataSource<any>([]);
 
   selectedWorkflows = new Set<string>();
 
   loading = false;
   error = false;
   errorMessage = '';
-
+allColumns: string[] = ['select', 'name', 'type', 'description', 'enabled', 'executionCount', 'actions'];
+selectedColumns = new Set(this.allColumns);
   @ViewChild(MatSort) sort!: MatSort;
   @ViewChild(MatPaginator) paginator!: MatPaginator;
 
@@ -69,9 +69,19 @@ export class WorkflowsComponent implements OnInit, AfterViewInit {
   }
 
   ngAfterViewInit(): void {
-    this.dataSource.sort = this.sort;
-    this.dataSource.paginator = this.paginator;
+   this.attachTableFeatures();
+this.setupFilterPredicate();
     this.setupFilterPredicate();
+    this.dataSource.sortingDataAccessor = (item: any, property: string) => {
+  switch (property) {
+    case 'type': return item.trigger?.type || '';
+    case 'name': return item.name || '';
+    case 'description': return item.description || '';
+    case 'enabled': return item.enabled ? 1 : 0;
+    case 'executionCount': return item.executionCount || 0;
+    default: return item[property];
+  }
+};
   }
 
   private setupFilterPredicate(): void {
@@ -104,7 +114,8 @@ export class WorkflowsComponent implements OnInit, AfterViewInit {
       // Ensure we have valid workflow data
       workflows = workflows.filter(w => w && typeof w === 'object');
       this.dataSource.data = workflows;
-      
+      // 🔥 FIX: reattach after data load
+setTimeout(() => this.attachTableFeatures());
       if (workflows.length === 0) {
         this.showMessage('No workflows found', 'info');
       }
@@ -237,4 +248,17 @@ export class WorkflowsComponent implements OnInit, AfterViewInit {
       panelClass
     });
   }
+  private attachTableFeatures(): void {
+  if (this.sort) this.dataSource.sort = this.sort;
+  if (this.paginator) this.dataSource.paginator = this.paginator;
+}
+toggleColumn(column: string) {
+  if (this.selectedColumns.has(column)) {
+    this.selectedColumns.delete(column);
+  } else {
+    this.selectedColumns.add(column);
+  }
+
+  this.displayedColumns = this.allColumns.filter(c => this.selectedColumns.has(c));
+}
 }
