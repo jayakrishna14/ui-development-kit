@@ -7,74 +7,208 @@
 
 mat-toolbar {
   flex-shrink: 0;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  
-  .toolbar-title {
-    margin-left: 16px;
-    font-size: 18px;
-    font-weight: 500;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.14);
+  background: linear-gradient(135deg, #3f51b5 0%, #5c6bc0 100%);
+  color: white;
+  min-height: 72px;
+  padding: 0 24px;
+
+  .toolbar-brand {
+    display: flex;
+    align-items: center;
+    gap: 14px;
   }
 
-  .spacer {
-    flex: 1 1 auto;
+  .toolbar-labels {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.1;
+
+    .toolbar-title {
+      font-size: 20px;
+      font-weight: 700;
+      margin: 0;
+    }
+
+    .toolbar-subtitle {
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.85);
+    }
+  }
+
+  .toolbar-actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  button {
+    color: white;
+  }
+
+  .mat-icon {
+    color: white;
   }
 }
 
 .content {
-  padding: 20px;
+  padding: 24px;
   flex: 1;
   overflow-y: auto;
 }
 
 mat-card {
   width: 100%;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);
+  border-radius: 20px;
+  overflow: hidden;
+}
 
-  mat-card-header {
-    padding: 20px;
-    border-bottom: 1px solid #e0e0e0;
-    margin: 0;
+.controls-card,
+.table-card,
+.response-card {
+  background: #ffffff;
+  border-radius: 20px;
+  margin-bottom: 20px;
+  padding: 20px;
+}
 
-    .header-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 20px;
-      flex-wrap: wrap;
+.controls-card {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
 
-      .header-title {
-        flex: 1;
-        min-width: 250px;
+.controls-grid {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
 
-        mat-card-title {
-          margin: 0 0 4px 0;
-          font-size: 20px;
-          font-weight: 600;
-        }
+.search-field {
+  flex: 1 1 340px;
+  min-width: 250px;
+}
 
-        mat-card-subtitle {
-          margin: 0;
-          color: #666;
-        }
-      }
+.controls-actions {
+  flex: 0 1 220px;
+  display: flex;
+  justify-content: flex-end;
+}
 
-      .header-actions {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        min-width: 300px;
+.controls-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
 
-        .search-field {
-          flex: 1;
-          min-width: 200px;
-        }
+.column-selector {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
 
-        button {
-          white-space: nowrap;
-        }
-      }
-    }
-  }
+.selector-label {
+  font-weight: 600;
+  color: #455a64;
+  min-width: 80px;
+}
+
+.column-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.summary-pill {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  color: #455a64;
+  font-size: 13px;
+}
+
+.summary-pill span {
+  background: #eceff1;
+  padding: 8px 12px;
+  border-radius: 999px;
+}
+
+.table-card {
+  padding: 0;
+}
+
+.table-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 20px 24px 0 24px;
+}
+
+.table-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.table-header p {
+  margin: 4px 0 0;
+  color: #616161;
+  font-size: 14px;
+}
+
+.response-card {
+  background: #263238;
+  color: #ffffff;
+}
+
+.response-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.response-header h4 {
+  margin: 0;
+  font-size: 16px;
+  color: #ffffff;
+}
+
+.response-header p {
+  margin: 4px 0 0;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 13px;
+}
+
+.status-chip {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.json-view {
+  background: #1e2a31;
+  border-radius: 14px;
+  padding: 18px;
+  color: #e0f7fa;
+  overflow-x: auto;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 mat-card-content {

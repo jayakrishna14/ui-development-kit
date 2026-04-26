@@ -6,11 +6,11 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatTabsModule } from '@angular/material/tabs';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { FormsModule } from '@angular/forms';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { SailPointSDKService } from '../sailpoint-sdk.service';
-import { JsonPatchOperationV2025OpV2025 } from 'sailpoint-api-client/dist/v2025/api';
 @Component({
   selector: 'app-workflow-details-dialog',
   standalone: true,
@@ -21,6 +21,7 @@ import { JsonPatchOperationV2025OpV2025 } from 'sailpoint-api-client/dist/v2025/
     MatTabsModule,
     MatFormFieldModule,
     MatInputModule,
+    MatTooltipModule,
     FormsModule,
     MatSnackBarModule,
     MatProgressSpinnerModule
@@ -66,27 +67,38 @@ import { JsonPatchOperationV2025OpV2025 } from 'sailpoint-api-client/dist/v2025/
 
                 <div class="info-item">
                   <label>Created:</label>
-                  <span>{{ data?.created | date:'medium' || '—' }}</span>
+                  <span>{{ data?.created ? (data.created | date:'medium') : '—' }}</span>
                 </div>
 
                 <div class="info-item">
                   <label>Modified:</label>
-                  <span>{{ data?.modified | date:'medium' || '—' }}</span>
+                  <span>{{ data?.modified ? (data.modified | date:'medium') : '—' }}</span>
                 </div>
 
                 <div class="info-item">
                   <label>Executions:</label>
                   <span>{{ data?.executionCount || 0 }}</span>
                 </div>
+              
 
                 <div class="info-item">
                   <label>Failures:</label>
                   <span class="failure-count">{{ data?.failureCount || 0 }}</span>
                 </div>
 
+                <div class="info-item">
+                  <label>Steps:</label>
+                  <span>{{ getStepCount(data) }}</span>
+                </div>
+
+                <div class="info-item">
+                  <label>Definition size:</label>
+                  <span>{{ getDefinitionSize(data) }}</span>
+                </div>
+
                 <div class="info-item full-width" *ngIf="data?.owner">
                   <label>Owner:</label>
-                  <span>{{ data?.owner?.name || '—' }}</span>
+                  <span>{{ data?.owner?.name || data?.owner?.id || '—' }}</span>
                 </div>
 
                 <div class="info-item full-width" *ngIf="data?.creator">
@@ -145,8 +157,61 @@ import { JsonPatchOperationV2025OpV2025 } from 'sailpoint-api-client/dist/v2025/
             <pre class="json-view">{{ (data?.definition | json) || 'No definition available' }}</pre>
           </div>
         </mat-tab>
+
+        <!-- RUN TAB -->
+        <mat-tab label="Run">
+          <ng-template mat-tab-label>
+            <mat-icon class="tab-icon">play_circle</mat-icon>
+            Run
+          </ng-template>
+          
+          <div class="tab-content">
+            <p class="test-description">Send a JSON payload to the workflow and inspect the response below.</p>
+
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Test payload</mat-label>
+              <textarea matInput rows="8" [(ngModel)]="testInputText"></textarea>
+            </mat-form-field>
+
+            <div class="test-actions">
+              <button mat-raised-button color="accent" (click)="testWorkflow()" [disabled]="data?.enabled || loading">
+                <mat-icon>play_arrow</mat-icon>
+                {{ loading ? 'Running...' : 'Run test' }}
+              </button>
+            </div>
+
+            <div *ngIf="testResult" class="test-result">
+              <h3>Test response</h3>
+              <pre class="json-view">{{ testResult | json }}</pre>
+            </div>
+          </div>
+        </mat-tab>
       </mat-tab-group>
 
+      <div *ngIf="executionDetails">
+
+  <h3>Execution Details</h3>
+
+  <pre class="json-view">{{ executionDetails | json }}</pre>
+
+  <h3>Steps</h3>
+
+  <div *ngFor="let step of executionDetails?.steps">
+
+    <div class="step-box">
+      <strong>{{ step.name }}</strong> - {{ step.status }}
+
+      <div><b>Input:</b></div>
+      <pre>{{ step.input | json }}</pre>
+
+      <div><b>Output:</b></div>
+      <pre>{{ step.output | json }}</pre>
+
+    </div>
+
+  </div>
+
+</div>
       <div class="dialog-actions">
         <button mat-button (click)="toggleEdit()" [disabled]="loading">
           {{ editMode ? 'Cancel' : 'Edit' }}
@@ -156,9 +221,7 @@ import { JsonPatchOperationV2025OpV2025 } from 'sailpoint-api-client/dist/v2025/
                 *ngIf="editMode" 
                 (click)="save()"
                 [disabled]="loading">
-          <mat-icon *ngIf="loading" class="spinner">
-            <mat-spinner diameter="20"></mat-spinner>
-          </mat-icon>
+          <mat-progress-spinner *ngIf="loading" diameter="20" mode="indeterminate" class="spinner"></mat-progress-spinner>
           {{ loading ? 'Saving...' : 'Save Changes' }}
         </button>
 
@@ -329,6 +392,11 @@ export class WorkflowDetailsDialogComponent implements OnInit {
   loading = false;
   jsonText = '';
   editData: any = {};
+  executionDetails: any = null;
+  testResult: any = null;
+  testInputText = `{
+  "input": {}
+}`;
 
   constructor(
     @Inject(MAT_DIALOG_DATA) public data: any,
@@ -370,21 +438,23 @@ export class WorkflowDetailsDialogComponent implements OnInit {
         updateData = JSON.parse(this.jsonText);
       }
 
-      // Prepare JSON Patch format - RFC 6902 compliant
-      const jsonPatchOps = [
-  {
-    op: JsonPatchOperationV2025OpV2025.Replace,
-    path: "/name",
-    value: "New Name"
-  }
-];
+      const patchOps: any[] = [];
+      if (updateData.name !== this.data.name) {
+        patchOps.push({ op: 'replace', path: '/name', value: updateData.name ?? null });
+      }
+      if (updateData.description !== this.data.description) {
+        patchOps.push({ op: 'replace', path: '/description', value: updateData.description ?? null });
+      }
 
-      // Call SDK with correct format
-      // The SDK expects id and the patch operations array as the body
+      if (patchOps.length === 0) {
+        this.showMessage('No changes detected to save', 'info');
+        return;
+      }
+
       await this.sdk.patchWorkflow({
-  id: this.data.id,
-  jsonPatchOperationV2025: jsonPatchOps
-});
+        id: this.data.id,
+        jsonPatchOperationV2025: patchOps
+      });
 
       this.showMessage('Workflow updated successfully', 'success');
       this.editMode = false;
@@ -406,18 +476,28 @@ export class WorkflowDetailsDialogComponent implements OnInit {
     }
 
     this.loading = true;
+    this.testResult = null;
 
     try {
-      // Call SDK with correct format (NO "body" wrapper)
+      let payload: any = {};
+      if (this.testInputText.trim()) {
+        payload = JSON.parse(this.testInputText);
+      }
+
       const result = await this.sdk.testWorkflow({
         id: this.data.id,
         testWorkflowRequestV2025: {
-          input: {}
+          input: payload
         }
       });
 
-      const executionId = result?.data?.workflowExecutionId || 'N/A';
-      this.showMessage(`Test triggered successfully (ID: ${executionId})`, 'success');
+      this.testResult = result?.data || result;
+      const executionId = result?.data?.workflowExecutionId;
+      if (executionId) {
+        await this.loadExecutionDetails(executionId);
+      }
+
+      this.showMessage('Test triggered successfully', 'success');
 
     } catch (e: any) {
       const errorMessage = e?.response?.data?.message || e?.message || 'Test failed';
@@ -443,4 +523,50 @@ export class WorkflowDetailsDialogComponent implements OnInit {
       panelClass
     });
   }
+  
+  async loadExecutionDetails(executionId: string): Promise<void> {
+    try {
+      const res = await (this.sdk as any).getWorkflowExecution({
+        id: executionId
+      });
+
+      this.executionDetails = res?.data || res;
+
+    } catch (e) {
+      console.error('Execution details failed', e);
+    }
+  }
+
+  getStepCount(workflow: any): number {
+    const definition = workflow?.definition;
+    if (!definition) {
+      return 0;
+    }
+
+    if (Array.isArray(definition.steps)) {
+      return definition.steps.length;
+    }
+    if (Array.isArray(definition.nodes)) {
+      return definition.nodes.length;
+    }
+    return 0;
+  }
+
+  getDefinitionSize(workflow: any): string {
+    if (!workflow?.definition) {
+      return '—';
+    }
+
+    try {
+      const json = JSON.stringify(workflow.definition);
+      const bytes = new TextEncoder().encode(json).length;
+      if (bytes < 1024) {
+        return `${bytes} B`;
+      }
+      return `${(bytes / 1024).toFixed(1)} KB`;
+    } catch {
+      return '—';
+    }
+  }
+
 }

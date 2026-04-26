@@ -44,17 +44,22 @@ import { WorkflowDetailsDialogComponent } from './workflow-details-dialog.compon
 })
 export class WorkflowsComponent implements OnInit, AfterViewInit {
 
-  title = 'Workflow Executions';
+  title = 'Workflow Manager';
 
-displayedColumns: string[] = ['select', 'name', 'type', 'description', 'enabled', 'executionCount', 'actions'];  dataSource = new MatTableDataSource<any>([]);
+  displayedColumns: string[] = ['select', 'name', 'owner', 'type', 'description', 'size', 'stepsCount', 'enabled', 'executionCount', 'actions'];
+  allColumns: string[] = ['select', 'name', 'owner', 'type', 'description', 'size', 'stepsCount', 'enabled', 'executionCount', 'actions'];
+  selectedColumns = new Set(this.allColumns);
+  dataSource = new MatTableDataSource<any>([]);
 
   selectedWorkflows = new Set<string>();
 
   loading = false;
   error = false;
   errorMessage = '';
-allColumns: string[] = ['select', 'name', 'type', 'description', 'enabled', 'executionCount', 'actions'];
-selectedColumns = new Set(this.allColumns);
+
+  lastApiAction = '';
+  lastApiResponse: any = null;
+
   @ViewChild(MatSort) sort!: MatSort;
   @ViewChild(MatPaginator) paginator!: MatPaginator;
 
@@ -69,19 +74,21 @@ selectedColumns = new Set(this.allColumns);
   }
 
   ngAfterViewInit(): void {
-   this.attachTableFeatures();
-this.setupFilterPredicate();
     this.setupFilterPredicate();
+    this.attachTableFeatures();
     this.dataSource.sortingDataAccessor = (item: any, property: string) => {
-  switch (property) {
-    case 'type': return item.trigger?.type || '';
-    case 'name': return item.name || '';
-    case 'description': return item.description || '';
-    case 'enabled': return item.enabled ? 1 : 0;
-    case 'executionCount': return item.executionCount || 0;
-    default: return item[property];
-  }
-};
+      switch (property) {
+        case 'owner': return this.getOwnerName(item).toLowerCase();
+        case 'type': return item.trigger?.type || '';
+        case 'name': return item.name || '';
+        case 'description': return item.description || '';
+        case 'size': return this.getDefinitionSize(item);
+        case 'stepsCount': return this.getStepCount(item);
+        case 'enabled': return item.enabled ? 1 : 0;
+        case 'executionCount': return item.executionCount || 0;
+        default: return item[property];
+      }
+    };
   }
 
   private setupFilterPredicate(): void {
@@ -90,7 +97,10 @@ this.setupFilterPredicate();
       return (
         (data.name && data.name.toLowerCase().includes(searchStr)) ||
         (data.description && data.description.toLowerCase().includes(searchStr)) ||
-        (data.id && data.id.toLowerCase().includes(searchStr))
+        (data.id && data.id.toLowerCase().includes(searchStr)) ||
+        (data.trigger?.type && data.trigger.type.toLowerCase().includes(searchStr)) ||
+        (data.owner?.name && data.owner.name.toLowerCase().includes(searchStr)) ||
+        (data.owner?.id && data.owner.id.toLowerCase().includes(searchStr))
       );
     };
   }
@@ -102,28 +112,23 @@ this.setupFilterPredicate();
 
     try {
       const res = await this.sdk.listWorkflows();
-      
-      // Handle both direct data and nested response structure
-      let workflows: any[] = [];
-      if (res && res.data) {
-        workflows = Array.isArray(res.data) ? res.data : [res.data];
-      } else if (Array.isArray(res)) {
-        workflows = res;
-      }
-      
-      // Ensure we have valid workflow data
-      workflows = workflows.filter(w => w && typeof w === 'object');
-      this.dataSource.data = workflows;
-      // 🔥 FIX: reattach after data load
-setTimeout(() => this.attachTableFeatures());
-      if (workflows.length === 0) {
-        this.showMessage('No workflows found', 'info');
-      }
+      const responseData: unknown = (res as { data?: unknown }).data ?? res;
+      const data = Array.isArray(responseData)
+        ? responseData
+        : this.hasItems(responseData)
+          ? responseData.items
+          : [];
+
+      this.dataSource.data = data;
+      this.selectedWorkflows.clear();
+      this.setLastApiResponse('List workflows', res);
+      setTimeout(() => this.attachTableFeatures());
     } catch (err: any) {
-      console.error('Error loading workflows:', err);
+      console.error('Workflow load failed:', err);
       this.error = true;
-      this.errorMessage = err?.message || 'Failed to load workflows. Please try again.';
-      this.showMessage(this.errorMessage, 'error');
+      this.errorMessage = err?.response?.data?.message || err?.message || 'Failed to load workflows';
+      this.dataSource.data = [];
+      this.setLastApiResponse('List workflows', err?.response || err);
     } finally {
       this.loading = false;
     }
@@ -131,7 +136,57 @@ setTimeout(() => this.attachTableFeatures());
 
   applyFilter(event: Event): void {
     const value = (event.target as HTMLInputElement).value;
-    this.dataSource.filter = value.trim();
+    this.dataSource.filter = value.trim().toLowerCase();
+  }
+
+  get enabledCount(): number {
+    return this.dataSource.data.filter((workflow: any) => workflow.enabled).length;
+  }
+
+  get disabledCount(): number {
+    return this.dataSource.data.length - this.enabledCount;
+  }
+
+  getOwnerName(workflow: any): string {
+    return workflow?.owner?.name || workflow?.owner?.id || '—';
+  }
+
+  getStepCount(workflow: any): number {
+    const definition = workflow?.definition || workflow;
+    if (Array.isArray(definition?.steps)) {
+      return definition.steps.length;
+    }
+    if (Array.isArray(definition?.nodes)) {
+      return definition.nodes.length;
+    }
+    if (Array.isArray(workflow?.steps)) {
+      return workflow.steps.length;
+    }
+    return 0;
+  }
+
+  getDefinitionSize(workflow: any): string {
+    if (!workflow?.definition) {
+      return '—';
+    }
+
+    try {
+      const json = JSON.stringify(workflow.definition);
+      const bytes = new TextEncoder().encode(json).length;
+      return this.formatBytes(bytes);
+    } catch {
+      return '—';
+    }
+  }
+
+  private formatBytes(bytes: number): string {
+    if (bytes < 1024) {
+      return `${bytes} B`;
+    }
+    if (bytes < 1024 * 1024) {
+      return `${(bytes / 1024).toFixed(1)} KB`;
+    }
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
 
   toggleSelection(id: string): void {
@@ -148,16 +203,20 @@ setTimeout(() => this.attachTableFeatures());
 
   async deleteWorkflow(id: string, name: string): Promise<void> {
     const confirmed = confirm(`Are you sure you want to delete workflow "${name}"? This action cannot be undone.`);
-    if (!confirmed) return;
+    if (!confirmed) {
+      return;
+    }
 
     this.loading = true;
     try {
-      await this.sdk.deleteWorkflow({ id });
+      const res = await this.sdk.deleteWorkflow({ id });
       this.showMessage(`Workflow "${name}" deleted successfully`, 'success');
-      this.loadWorkflows();
+      this.setLastApiResponse('Delete workflow', res);
+      await this.loadWorkflows();
     } catch (err: any) {
       const message = err?.response?.data?.message || 'Failed to delete workflow';
       this.showMessage(message, 'error');
+      this.setLastApiResponse('Delete workflow', err?.response || err);
       console.error('Error deleting workflow:', err);
     } finally {
       this.loading = false;
@@ -173,40 +232,44 @@ setTimeout(() => this.attachTableFeatures());
     const confirmed = confirm(
       `Delete ${this.selectedWorkflows.size} workflow(s)? This action cannot be undone.`
     );
-    if (!confirmed) return;
+    if (!confirmed) {
+      return;
+    }
 
     this.loading = true;
     let successCount = 0;
     let failureCount = 0;
+    const responses: any[] = [];
 
     try {
       const deletePromises = Array.from(this.selectedWorkflows).map(id =>
         this.sdk.deleteWorkflow({ id })
-          .then(() => {
+          .then(res => {
             successCount++;
+            responses.push({ id, status: 'deleted', response: res });
           })
           .catch(err => {
             failureCount++;
+            responses.push({ id, status: 'failed', error: err });
             console.error(`Failed to delete workflow ${id}:`, err);
           })
       );
 
       await Promise.all(deletePromises);
-
       this.selectedWorkflows.clear();
-      
+      this.setLastApiResponse('Bulk delete workflows', { successCount, failureCount, items: responses });
+
       if (successCount > 0) {
         this.showMessage(
           `Successfully deleted ${successCount} workflow(s)${failureCount > 0 ? `. ${failureCount} failed.` : ''}`,
           failureCount > 0 ? 'warning' : 'success'
         );
       }
-      
-      if (failureCount === 0) {
-        this.loadWorkflows();
-      }
+
+      await this.loadWorkflows();
     } catch (err: any) {
       this.showMessage('Failed to delete workflows', 'error');
+      this.setLastApiResponse('Bulk delete workflows', err?.response || err);
       console.error('Error in bulk delete:', err);
     } finally {
       this.loading = false;
@@ -240,7 +303,7 @@ setTimeout(() => this.attachTableFeatures());
   private showMessage(message: string, type: 'success' | 'error' | 'warning' | 'info'): void {
     const duration = type === 'error' ? 5000 : 3000;
     const panelClass = `snackbar-${type}`;
-    
+
     this.snackBar.open(message, 'Close', {
       duration,
       horizontalPosition: 'end',
@@ -248,17 +311,64 @@ setTimeout(() => this.attachTableFeatures());
       panelClass
     });
   }
+
   private attachTableFeatures(): void {
-  if (this.sort) this.dataSource.sort = this.sort;
-  if (this.paginator) this.dataSource.paginator = this.paginator;
-}
-toggleColumn(column: string) {
-  if (this.selectedColumns.has(column)) {
-    this.selectedColumns.delete(column);
-  } else {
-    this.selectedColumns.add(column);
+    if (this.sort) {
+      this.dataSource.sort = this.sort;
+    }
+    if (this.paginator) {
+      this.dataSource.paginator = this.paginator;
+    }
   }
 
-  this.displayedColumns = this.allColumns.filter(c => this.selectedColumns.has(c));
-}
+  private hasItems(value: unknown): value is { items: any[] } {
+    return typeof value === 'object'
+      && value !== null
+      && Array.isArray((value as { items?: unknown }).items);
+  }
+
+  toggleColumn(column: string): void {
+    if (this.selectedColumns.has(column)) {
+      this.selectedColumns.delete(column);
+    } else {
+      this.selectedColumns.add(column);
+    }
+
+    this.displayedColumns = this.allColumns.filter(c => this.selectedColumns.has(c));
+  }
+
+  formatColumnName(column: string): string {
+    const mapping: Record<string, string> = {
+      select: 'Select',
+      name: 'Name',
+      owner: 'Owner',
+      type: 'Type',
+      description: 'Description',
+      size: 'Size',
+      stepsCount: 'Steps',
+      enabled: 'Status',
+      executionCount: 'Executions',
+      actions: 'Actions'
+    };
+
+    return mapping[column] || column;
+  }
+
+  private setLastApiResponse(action: string, response: any): void {
+    const payload = response?.data ?? response;
+    const status = response?.status ?? (response?.message ? 'error' : 'unknown');
+
+    this.lastApiAction = action;
+    this.lastApiResponse = {
+      action,
+      status,
+      timestamp: new Date(),
+      payload,
+      request: response?.config ? {
+        url: response.config.url,
+        method: response.config.method,
+        status
+      } : undefined
+    };
+  }
 }
