@@ -49,12 +49,17 @@
 
       <div class="controls-meta">
         <div class="column-selector">
-          <span class="selector-label">Columns</span>
-          <div class="column-list">
-            <mat-checkbox *ngFor="let col of allColumns" [checked]="selectedColumns.has(col)" (change)="toggleColumn(col)">
-              {{ formatColumnName(col) }}
-            </mat-checkbox>
-          </div>
+          <button mat-stroked-button [matMenuTriggerFor]="columnsMenu" class="columns-button">
+            <mat-icon>view_column</mat-icon>
+            Columns
+          </button>
+          <mat-menu #columnsMenu="matMenu" class="columns-menu">
+            <button mat-menu-item *ngFor="let col of allColumns" (click)="$event.stopPropagation()">
+              <mat-checkbox [checked]="selectedColumns.has(col)" (change)="toggleColumn(col)">
+                {{ formatColumnName(col) }}
+              </mat-checkbox>
+            </button>
+          </mat-menu>
         </div>
 
         <div class="summary-pill">
@@ -116,6 +121,14 @@
               </td>
             </ng-container>
 
+            <!-- UPDATED BY -->
+            <ng-container matColumnDef="modifiedBy">
+              <th mat-header-cell *matHeaderCellDef mat-sort-header>Updated By</th>
+              <td mat-cell *matCellDef="let w">
+                {{ getModifiedByName(w) }}
+              </td>
+            </ng-container>
+
             <!-- DESCRIPTION -->
             <ng-container matColumnDef="description">
               <th mat-header-cell *matHeaderCellDef mat-sort-header>Description</th>
@@ -164,18 +177,41 @@
               </td>
             </ng-container>
 
+            <!-- CREATED -->
+            <ng-container matColumnDef="created">
+              <th mat-header-cell *matHeaderCellDef mat-sort-header>Created</th>
+              <td mat-cell *matCellDef="let w">
+                {{ formatTimestamp(w.created) }}
+              </td>
+            </ng-container>
+
+            <!-- UPDATED -->
+            <ng-container matColumnDef="modified">
+              <th mat-header-cell *matHeaderCellDef mat-sort-header>Updated</th>
+              <td mat-cell *matCellDef="let w">
+                {{ formatTimestamp(w.modified) }}
+              </td>
+            </ng-container>
+
             <!-- ACTIONS -->
             <ng-container matColumnDef="actions">
               <th mat-header-cell *matHeaderCellDef>Actions</th>
-              <td mat-cell *matCellDef="let w">
+              <td mat-cell *matCellDef="let w" class="actions-cell">
                 <button mat-icon-button (click)="viewWorkflow(w)" matTooltip="View details">
                   <mat-icon>visibility</mat-icon>
+                </button>
+                <button mat-icon-button class="download-action" (click)="downloadWorkflow(w)" matTooltip="Download workflow JSON">
+                  <mat-icon>download</mat-icon>
+                </button>
+                <button mat-icon-button class="update-action" (click)="prepareWorkflowJsonUpdate(w, workflowUpdateImport)" matTooltip="Patch workflow from JSON">
+                  <mat-icon>published_with_changes</mat-icon>
                 </button>
                 <button mat-icon-button class="danger-action" (click)="deleteWorkflow(w.id, w.name)" matTooltip="High risk: delete workflow">
                   <mat-icon>delete</mat-icon>
                 </button>
               </td>
             </ng-container>
+            <input #workflowUpdateImport type="file" accept=".json,application/json" hidden (change)="importWorkflowUpdate($event)">
 <!-- TYPE -->
 <ng-container matColumnDef="type">
   <th mat-header-cell *matHeaderCellDef mat-sort-header>Type</th>

@@ -128,10 +128,11 @@ mat-card {
   flex-wrap: wrap;
 }
 
-.selector-label {
-  font-weight: 600;
-  color: #455a64;
-  min-width: 80px;
+.columns-button {
+  color: #1e3a8a;
+  border-color: #bfdbfe;
+  background: linear-gradient(135deg, #eff6ff, #ecfeff);
+  font-weight: 800;
 }
 
 .column-list {
@@ -309,6 +310,31 @@ mat-card-content {
 .danger-action:hover {
   color: #ffffff;
   background: linear-gradient(135deg, #ef4444, #991b1b);
+}
+
+.actions-cell {
+  white-space: nowrap;
+}
+
+.download-action {
+  color: #0369a1;
+  background: #e0f2fe;
+  border: 1px solid #bae6fd;
+}
+
+.update-action {
+  color: #6d28d9;
+  background: #ede9fe;
+  border: 1px solid #ddd6fe;
+}
+
+::ng-deep .columns-menu .mat-mdc-menu-content {
+  padding: 8px;
+}
+
+::ng-deep .columns-menu .mat-mdc-menu-item {
+  min-height: 38px;
+  border-radius: 10px;
 }
 
 .failure-count {

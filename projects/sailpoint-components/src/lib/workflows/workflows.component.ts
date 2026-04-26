@@ -14,6 +14,7 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatMenuModule } from '@angular/material/menu';
 
 import { SailPointSDKService } from '../sailpoint-sdk.service';
 import { WorkflowDetailsDialogComponent } from './workflow-details-dialog.component';
@@ -39,6 +40,7 @@ import { WorkflowDeleteDialogComponent } from './workflow-delete-dialog.componen
     MatProgressSpinnerModule,
     MatTooltipModule,
     MatSnackBarModule,
+    MatMenuModule,
     WorkflowDetailsDialogComponent,
     WorkflowJsonDialogComponent,
     WorkflowDeleteDialogComponent
@@ -51,8 +53,8 @@ export class WorkflowsComponent implements OnInit, AfterViewInit {
   title = 'Workflow Manager';
 
   displayedColumns: string[] = ['select', 'name', 'owner', 'type', 'description', 'size', 'stepsCount', 'enabled', 'executionCount', 'actions'];
-  allColumns: string[] = ['select', 'name', 'owner', 'type', 'description', 'size', 'stepsCount', 'enabled', 'executionCount', 'actions'];
-  selectedColumns = new Set(this.allColumns);
+  allColumns: string[] = ['select', 'name', 'owner', 'modifiedBy', 'type', 'description', 'size', 'stepsCount', 'enabled', 'executionCount', 'created', 'modified', 'actions'];
+  selectedColumns = new Set(this.displayedColumns);
   dataSource = new MatTableDataSource<any>([]);
 
   selectedWorkflows = new Set<string>();
@@ -60,6 +62,7 @@ export class WorkflowsComponent implements OnInit, AfterViewInit {
   loading = false;
   error = false;
   errorMessage = '';
+  workflowForJsonUpdate: any = null;
 
   @ViewChild(MatSort) sort!: MatSort;
   @ViewChild(MatPaginator) paginator!: MatPaginator;
@@ -80,6 +83,7 @@ export class WorkflowsComponent implements OnInit, AfterViewInit {
     this.dataSource.sortingDataAccessor = (item: any, property: string) => {
       switch (property) {
         case 'owner': return this.getOwnerName(item).toLowerCase();
+        case 'modifiedBy': return this.getModifiedByName(item).toLowerCase();
         case 'type': return this.getTriggerType(item).toLowerCase();
         case 'name': return item.name || '';
         case 'description': return item.description || '';
@@ -87,6 +91,8 @@ export class WorkflowsComponent implements OnInit, AfterViewInit {
         case 'stepsCount': return this.getStepCount(item);
         case 'enabled': return item.enabled ? 1 : 0;
         case 'executionCount': return item.executionCount || 0;
+        case 'created': return item.created || '';
+        case 'modified': return item.modified || '';
         default: return item[property];
       }
     };
@@ -101,7 +107,8 @@ export class WorkflowsComponent implements OnInit, AfterViewInit {
         (data.id && data.id.toLowerCase().includes(searchStr)) ||
         (this.getTriggerType(data).toLowerCase().includes(searchStr)) ||
         (data.owner?.name && data.owner.name.toLowerCase().includes(searchStr)) ||
-        (data.owner?.id && data.owner.id.toLowerCase().includes(searchStr))
+        (data.owner?.id && data.owner.id.toLowerCase().includes(searchStr)) ||
+        (this.getModifiedByName(data).toLowerCase().includes(searchStr))
       );
     };
   }
@@ -143,6 +150,18 @@ export class WorkflowsComponent implements OnInit, AfterViewInit {
 
   getOwnerName(workflow: any): string {
     return workflow?.owner?.name || workflow?.owner?.id || '—';
+  }
+
+  getModifiedByName(workflow: any): string {
+    return workflow?.modifiedBy?.name || workflow?.modifiedBy?.id || '—';
+  }
+
+  formatTimestamp(value: string | undefined): string {
+    if (!value) {
+      return '—';
+    }
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
   }
 
   getTriggerType(workflow: any): string {
@@ -327,7 +346,7 @@ export class WorkflowsComponent implements OnInit, AfterViewInit {
     reader.readAsText(file);
   }
 
-  private openWorkflowJsonDialog(data: any): void {
+  private openWorkflowJsonDialog(data: any, onSubmit?: (workflow: any) => Promise<void>): void {
     const dialogRef = this.dialog.open(WorkflowJsonDialogComponent, {
       width: '900px',
       maxHeight: '92vh',
@@ -338,7 +357,7 @@ export class WorkflowsComponent implements OnInit, AfterViewInit {
       if (!workflow) {
         return;
       }
-      await this.createWorkflowFromBody(workflow);
+      await (onSubmit ? onSubmit(workflow) : this.createWorkflowFromBody(workflow));
     });
   }
 
@@ -360,7 +379,8 @@ export class WorkflowsComponent implements OnInit, AfterViewInit {
 
   viewWorkflow(workflow: any): void {
     const dialogRef = this.dialog.open(WorkflowDetailsDialogComponent, {
-      width: '900px',
+      width: '1180px',
+      maxWidth: '96vw',
       maxHeight: '90vh',
       disableClose: false,
       data: workflow
@@ -374,12 +394,84 @@ export class WorkflowsComponent implements OnInit, AfterViewInit {
     });
   }
 
+  downloadWorkflow(workflow: any): void {
+    const json = JSON.stringify(workflow, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${this.getSafeFileName(workflow?.name || workflow?.id || 'workflow')}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
+  prepareWorkflowJsonUpdate(workflow: any, input: HTMLInputElement): void {
+    this.workflowForJsonUpdate = workflow;
+    input.click();
+  }
+
+  importWorkflowUpdate(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    const workflow = this.workflowForJsonUpdate;
+    input.value = '';
+    this.workflowForJsonUpdate = null;
+
+    if (!file || !workflow) {
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      this.openWorkflowJsonDialog({
+        title: 'Update workflow from JSON',
+        subtitle: `Review JSON before patching "${workflow.name || workflow.id}".`,
+        actionLabel: 'Patch workflow',
+        actionIcon: 'published_with_changes',
+        icon: 'published_with_changes',
+        jsonText: String(reader.result || '')
+      }, importedWorkflow => this.patchWorkflowFromBody(workflow, importedWorkflow));
+    };
+    reader.onerror = () => this.showMessage('Failed to read workflow JSON file', 'error');
+    reader.readAsText(file);
+  }
+
   getStatusLabel(enabled: boolean): string {
     return enabled ? 'Enabled' : 'Disabled';
   }
 
   getStatusColor(enabled: boolean): string {
     return enabled ? 'accent' : 'warn';
+  }
+
+  private async patchWorkflowFromBody(targetWorkflow: any, importedWorkflow: any): Promise<void> {
+    if (!targetWorkflow?.id) {
+      this.showMessage('Cannot update: workflow ID is missing', 'error');
+      return;
+    }
+
+    this.loading = true;
+    try {
+      const body = this.cleanWorkflowBody(importedWorkflow);
+      const patchOps = this.buildReplacePatch(body);
+      if (patchOps.length === 0) {
+        this.showMessage('No patchable workflow fields found in JSON', 'warning');
+        return;
+      }
+
+      await this.sdk.patchWorkflow({
+        id: targetWorkflow.id,
+        jsonPatchOperationV2025: patchOps
+      });
+      this.showMessage(`Workflow "${targetWorkflow.name || targetWorkflow.id}" updated`, 'success');
+      await this.loadWorkflows();
+    } catch (err: any) {
+      const message = err?.response?.data?.message || err?.message || 'Failed to update workflow';
+      this.showMessage(message, 'error');
+      console.error('Workflow update import failed:', err);
+    } finally {
+      this.loading = false;
+    }
   }
 
   private showMessage(message: string, type: 'success' | 'error' | 'warning' | 'info'): void {
@@ -456,11 +548,27 @@ export class WorkflowsComponent implements OnInit, AfterViewInit {
   }
 
   private cleanWorkflowForCreate(workflow: any): any {
-    const { id, created, modified, modifiedBy, creator, executionCount, failureCount, ...body } = workflow;
+    const body = this.cleanWorkflowBody(workflow);
     return {
       ...body,
       enabled: body.enabled === true ? false : body.enabled
     };
+  }
+
+  private cleanWorkflowBody(workflow: any): any {
+    const { id, created, modified, modifiedBy, creator, executionCount, failureCount, ...body } = workflow;
+    return body;
+  }
+
+  private buildReplacePatch(workflow: any): any[] {
+    const allowedFields = ['name', 'owner', 'description', 'enabled', 'definition', 'trigger'];
+    return allowedFields
+      .filter(field => Object.prototype.hasOwnProperty.call(workflow, field))
+      .map(field => ({ op: 'replace', path: `/${field}`, value: workflow[field] }));
+  }
+
+  private getSafeFileName(value: string): string {
+    return value.replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'workflow';
   }
 
   private getStarterWorkflow(): any {
@@ -500,12 +608,15 @@ export class WorkflowsComponent implements OnInit, AfterViewInit {
       select: 'Select',
       name: 'Name',
       owner: 'Owner',
+      modifiedBy: 'Updated By',
       type: 'Type',
       description: 'Description',
       size: 'Size',
       stepsCount: 'Steps',
       enabled: 'Status',
       executionCount: 'Executions',
+      created: 'Created',
+      modified: 'Updated',
       actions: 'Actions'
     };
 
