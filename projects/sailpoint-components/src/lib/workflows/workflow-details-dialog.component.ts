@@ -10,7 +10,7 @@ import { FormsModule } from '@angular/forms';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { SailPointSDKService } from '../sailpoint-sdk.service';
-
+import { JsonPatchOperationV2025OpV2025 } from 'sailpoint-api-client/dist/v2025/api';
 @Component({
   selector: 'app-workflow-details-dialog',
   standalone: true,
@@ -372,19 +372,19 @@ export class WorkflowDetailsDialogComponent implements OnInit {
 
       // Prepare JSON Patch format - RFC 6902 compliant
       const jsonPatchOps = [
-        {
-          op: 'replace',
-          path: '/',
-          value: updateData
-        }
-      ];
+  {
+    op: JsonPatchOperationV2025OpV2025.Replace,
+    path: "/name",
+    value: "New Name"
+  }
+];
 
       // Call SDK with correct format
       // The SDK expects id and the patch operations array as the body
       await this.sdk.patchWorkflow({
-        id: this.data.id,
-        body: jsonPatchOps
-      });
+  id: this.data.id,
+  jsonPatchOperationV2025: jsonPatchOps
+});
 
       this.showMessage('Workflow updated successfully', 'success');
       this.editMode = false;
@@ -411,7 +411,7 @@ export class WorkflowDetailsDialogComponent implements OnInit {
       // Call SDK with correct format (NO "body" wrapper)
       const result = await this.sdk.testWorkflow({
         id: this.data.id,
-        testWorkflowRequest: {
+        testWorkflowRequestV2025: {
           input: {}
         }
       });
