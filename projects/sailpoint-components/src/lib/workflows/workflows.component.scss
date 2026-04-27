@@ -260,6 +260,10 @@ mat-card-content {
     tr:nth-child(odd) td {
       background: #ffffff;
     }
+
+    tr:hover td {
+      background: #e0f2fe;
+    }
   }
 }
 
@@ -300,32 +304,8 @@ mat-card-content {
   }
 }
 
-.danger-action {
-  color: #b91c1c;
-  background: #fee2e2;
-  border: 1px solid #fecaca;
-  box-shadow: 0 8px 18px rgba(220, 38, 38, 0.18);
-}
-
-.danger-action:hover {
-  color: #ffffff;
-  background: linear-gradient(135deg, #ef4444, #991b1b);
-}
-
 .actions-cell {
   white-space: nowrap;
-}
-
-.download-action {
-  color: #0369a1;
-  background: #e0f2fe;
-  border: 1px solid #bae6fd;
-}
-
-.update-action {
-  color: #6d28d9;
-  background: #ede9fe;
-  border: 1px solid #ddd6fe;
 }
 
 ::ng-deep .columns-menu .mat-mdc-menu-content {
@@ -335,6 +315,24 @@ mat-card-content {
 ::ng-deep .columns-menu .mat-mdc-menu-item {
   min-height: 38px;
   border-radius: 10px;
+}
+
+::ng-deep .workflow-actions-menu .mat-mdc-menu-content {
+  padding: 8px;
+}
+
+::ng-deep .workflow-actions-menu .mat-mdc-menu-item {
+  min-height: 40px;
+  border-radius: 8px;
+}
+
+::ng-deep .workflow-actions-menu .mat-mdc-menu-item:hover {
+  background: #e0f2fe;
+}
+
+::ng-deep .workflow-actions-menu .danger-menu-item,
+::ng-deep .workflow-actions-menu .danger-menu-item mat-icon {
+  color: #b91c1c;
 }
 
 .failure-count {

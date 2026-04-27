@@ -10,6 +10,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { FormsModule } from '@angular/forms';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatSelectModule } from '@angular/material/select';
 import { SailPointSDKService } from '../sailpoint-sdk.service';
 @Component({
   selector: 'app-workflow-details-dialog',
@@ -24,7 +25,8 @@ import { SailPointSDKService } from '../sailpoint-sdk.service';
     MatTooltipModule,
     FormsModule,
     MatSnackBarModule,
-    MatProgressSpinnerModule
+    MatProgressSpinnerModule,
+    MatSelectModule
   ],
   template: `
     <div class="dialog-container">
@@ -211,7 +213,10 @@ import { SailPointSDKService } from '../sailpoint-sdk.service';
               </button>
               <mat-form-field appearance="outline">
                 <mat-label>Status filter</mat-label>
-                <input matInput [(ngModel)]="executionFilter" placeholder='status eq "Failed"'>
+                <mat-select [(ngModel)]="executionStatusFilter" (selectionChange)="loadExecutions()">
+                  <mat-option value="">All statuses</mat-option>
+                  <mat-option *ngFor="let status of executionStatuses" [value]="status">{{ status }}</mat-option>
+                </mat-select>
               </mat-form-field>
             </div>
 
@@ -552,8 +557,16 @@ import { SailPointSDKService } from '../sailpoint-sdk.service';
       font: inherit;
     }
 
+    .execution-row:hover {
+      border-color: #0ea5e9;
+      background: linear-gradient(135deg, #dbeafe, #ccfbf1);
+      color: #0f172a;
+    }
+
     .execution-row.active {
       border-color: #2563eb;
+      background: #dbeafe;
+      color: #0f172a;
       box-shadow: 0 10px 24px rgba(37, 99, 235, 0.16);
     }
 
@@ -627,7 +640,8 @@ export class WorkflowDetailsDialogComponent implements OnInit {
   executionHistory: any = null;
   executions: any[] = [];
   selectedExecutionId = '';
-  executionFilter = '';
+  executionStatusFilter = '';
+  executionStatuses = ['COMPLETED', 'FAILED', 'RUNNING', 'CANCELED', 'TERMINATED'];
   testResult: any = null;
   testInputText = `{
   "input": {}
@@ -816,10 +830,10 @@ export class WorkflowDetailsDialogComponent implements OnInit {
         id: this.data.id,
         limit: 250,
         offset: 0,
-        filters: this.executionFilter.trim() || undefined
+        filters: this.getExecutionStatusFilter()
       });
       const payload = res?.data || res;
-      this.executions = Array.isArray(payload) ? payload : [];
+      this.executions = this.extractExecutions(payload);
       if (this.executions.length === 0) {
         this.showMessage('No executions found', 'info');
       }
@@ -830,6 +844,20 @@ export class WorkflowDetailsDialogComponent implements OnInit {
     } finally {
       this.loading = false;
     }
+  }
+
+  private getExecutionStatusFilter(): string | undefined {
+    return this.executionStatusFilter ? `status eq "${this.executionStatusFilter}"` : undefined;
+  }
+
+  private extractExecutions(payload: any): any[] {
+    if (Array.isArray(payload)) {
+      return payload;
+    }
+    if (Array.isArray(payload?.items)) {
+      return payload.items;
+    }
+    return [];
   }
 
   async loadExecutionHistory(executionId: string): Promise<void> {

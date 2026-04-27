@@ -90,7 +90,7 @@ export class WorkflowsComponent implements OnInit, AfterViewInit {
         case 'size': return this.getDefinitionSize(item);
         case 'stepsCount': return this.getStepCount(item);
         case 'enabled': return item.enabled ? 1 : 0;
-        case 'executionCount': return item.executionCount || 0;
+        case 'executionCount': return this.getExecutionCount(item);
         case 'created': return item.created || '';
         case 'modified': return item.modified || '';
         default: return item[property];
@@ -119,7 +119,7 @@ export class WorkflowsComponent implements OnInit, AfterViewInit {
     this.errorMessage = '';
 
     try {
-      const data = await this.loadAllWorkflows();
+      const data = await this.enrichWorkflowSummaries(await this.loadAllWorkflows());
 
       this.dataSource.data = data;
       this.selectedWorkflows.clear();
@@ -214,6 +214,27 @@ export class WorkflowsComponent implements OnInit, AfterViewInit {
     } catch {
       return '—';
     }
+  }
+
+  getExecutionCount(workflow: any): number {
+    const value = workflow?.executionCount
+      ?? workflow?.executionsCount
+      ?? workflow?.executionStats?.total
+      ?? workflow?.executionStats?.count
+      ?? workflow?.stats?.executionCount
+      ?? workflow?.stats?.executions;
+
+    return Number.isFinite(Number(value)) ? Number(value) : 0;
+  }
+
+  getFailureCount(workflow: any): number {
+    const value = workflow?.failureCount
+      ?? workflow?.failedExecutionCount
+      ?? workflow?.executionStats?.failed
+      ?? workflow?.executionStats?.failureCount
+      ?? workflow?.stats?.failureCount;
+
+    return Number.isFinite(Number(value)) ? Number(value) : 0;
   }
 
   private formatBytes(bytes: number): string {
@@ -444,6 +465,36 @@ export class WorkflowsComponent implements OnInit, AfterViewInit {
     return enabled ? 'accent' : 'warn';
   }
 
+  async toggleWorkflowStatus(workflow: any): Promise<void> {
+    if (!workflow?.id) {
+      this.showMessage('Cannot update: workflow ID is missing', 'error');
+      return;
+    }
+
+    const nextEnabled = !workflow.enabled;
+    this.loading = true;
+    try {
+      await this.sdk.patchWorkflow({
+        id: workflow.id,
+        jsonPatchOperationV2025: [
+          { op: 'replace', path: '/enabled', value: nextEnabled }
+        ]
+      });
+
+      this.showMessage(
+        `Workflow "${workflow.name || workflow.id}" ${nextEnabled ? 'enabled' : 'disabled'}`,
+        'success'
+      );
+      await this.loadWorkflows();
+    } catch (err: any) {
+      const message = err?.response?.data?.message || err?.message || 'Failed to update workflow status';
+      this.showMessage(message, 'error');
+      console.error('Workflow status update failed:', err);
+    } finally {
+      this.loading = false;
+    }
+  }
+
   private async patchWorkflowFromBody(targetWorkflow: any, importedWorkflow: any): Promise<void> {
     if (!targetWorkflow?.id) {
       this.showMessage('Cannot update: workflow ID is missing', 'error');
@@ -536,6 +587,34 @@ export class WorkflowsComponent implements OnInit, AfterViewInit {
     }
 
     return workflows;
+  }
+
+  private async enrichWorkflowSummaries(workflows: any[]): Promise<any[]> {
+    const batchSize = 8;
+    const enriched: any[] = [];
+
+    for (let index = 0; index < workflows.length; index += batchSize) {
+      const batch = workflows.slice(index, index + batchSize);
+      const details = await Promise.all(batch.map(workflow => this.loadWorkflowSummaryDetail(workflow)));
+      enriched.push(...details);
+    }
+
+    return enriched;
+  }
+
+  private async loadWorkflowSummaryDetail(workflow: any): Promise<any> {
+    if (!workflow?.id || workflow.executionCount !== undefined) {
+      return workflow;
+    }
+
+    try {
+      const res = await this.sdk.getWorkflow({ id: workflow.id });
+      const detail = (res as { data?: any })?.data || res;
+      return { ...workflow, ...detail };
+    } catch (err) {
+      console.warn(`Workflow detail enrichment failed for ${workflow.id}:`, err);
+      return workflow;
+    }
   }
 
   private extractWorkflows(response: unknown): any[] {
