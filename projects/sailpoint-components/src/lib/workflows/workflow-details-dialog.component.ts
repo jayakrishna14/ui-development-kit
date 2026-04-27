@@ -10,6 +10,8 @@ import { FormsModule } from '@angular/forms';
 import { MatSnackBarModule, MatSnackBar } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
+import { MatDatepickerModule } from '@angular/material/datepicker';
+import { MatNativeDateModule } from '@angular/material/core';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { SailPointSDKService } from '../sailpoint-sdk.service';
 
@@ -27,7 +29,9 @@ import { SailPointSDKService } from '../sailpoint-sdk.service';
     FormsModule,
     MatSnackBarModule,
     MatProgressSpinnerModule,
-    MatSelectModule
+    MatSelectModule,
+    MatDatepickerModule,
+    MatNativeDateModule
   ],
   styles: [
     `
@@ -84,6 +88,37 @@ import { SailPointSDKService } from '../sailpoint-sdk.service';
       border: 1px dashed #c6c6c6;
       background: #fbfbfb;
       color: #5e5e5e;
+    }
+    .execution-flow-popup, .step-details-popup {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+      z-index: 1000;
+      max-width: 90vw;
+      max-height: 80vh;
+      overflow: auto;
+      padding: 20px;
+    }
+    .popup-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0,0,0,0.5);
+      z-index: 999;
+    }
+    .pagination-controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 16px;
+      justify-content: center;
     }
     `,
     `
@@ -428,23 +463,22 @@ import { SailPointSDKService } from '../sailpoint-sdk.service';
           </ng-template>
           
           <div class="tab-content">
-            <div *ngIf="!editMode" class="view-mode">
-              <div class="info-grid">
-                <div class="info-item">
-                  <label>ID:</label>
-                  <code>{{ data?.id || '—' }}</code>
-                </div>
-                
-                <div class="info-item">
-                  <label>Name:</label>
-                  <span>{{ data?.name || '—' }}</span>
-                </div>
+              <div *ngIf="!editMode" class="view-mode">
+                <div class="info-grid">
+                  <div class="info-item">
+                    <label>ID:</label>
+                    <code>{{ data?.id || '—' }}</code>
+                  </div>
+                  
+                  <div class="info-item">
+                    <label>Name:</label>
+                    <span>{{ data?.name || '—' }}</span>
+                  </div>
 
-                <div class="info-item">
-                  <label>Description:</label>
-                  <span>{{ data?.description || '—' }}</span>
-                </div>
-
+                  <div class="info-item">
+                    <label>Description:</label>
+                    <span>{{ data?.description || '—' }}</span>
+                  </div>
                 <div class="info-item">
                   <label>Status:</label>
                   <span [ngClass]="data?.enabled ? 'enabled-text' : 'disabled-text'">
@@ -498,8 +532,6 @@ import { SailPointSDKService } from '../sailpoint-sdk.service';
                 </div>
               </div>
             </div>
-
-            <!-- EDIT MODE -->
             <div *ngIf="editMode" class="edit-mode">
               <mat-form-field appearance="outline" class="full-width">
                 <mat-label>Name</mat-label>
@@ -525,7 +557,6 @@ import { SailPointSDKService } from '../sailpoint-sdk.service';
             <div *ngIf="!editMode" class="json-tree">
               <ng-container *ngTemplateOutlet="jsonNode; context: { value: data, keyName: '', depth: 0 }"></ng-container>
             </div>
-
             <div *ngIf="editMode" class="json-edit">
               <textarea [(ngModel)]="jsonText" class="json-editor"></textarea>
             </div>
@@ -540,8 +571,13 @@ import { SailPointSDKService } from '../sailpoint-sdk.service';
           </ng-template>
           
           <div class="tab-content">
-            <div class="json-tree" *ngIf="data?.definition; else noDefinition">
-              <ng-container *ngTemplateOutlet="jsonNode; context: { value: data.definition, keyName: 'definition', depth: 0 }"></ng-container>
+            <div *ngIf="!editMode">
+              <div class="json-tree" *ngIf="data?.definition; else noDefinition">
+                <ng-container *ngTemplateOutlet="jsonNode; context: { value: data.definition, keyName: 'definition', depth: 0 }"></ng-container>
+              </div>
+            </div>
+            <div *ngIf="editMode" class="json-edit">
+              <textarea [(ngModel)]="definitionText" class="json-editor"></textarea>
             </div>
             <ng-template #noDefinition>
               <div class="empty-panel">No definition available</div>
@@ -598,6 +634,22 @@ import { SailPointSDKService } from '../sailpoint-sdk.service';
                   <mat-option *ngFor="let status of executionStatuses" [value]="status">{{ status }}</mat-option>
                 </mat-select>
               </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Start date</mat-label>
+                <input matInput [matDatepicker]="startPicker" [(ngModel)]="executionStartDate" (dateChange)="loadExecutions()">
+                <mat-datepicker-toggle matIconSuffix [for]="startPicker"></mat-datepicker-toggle>
+                <mat-datepicker #startPicker></mat-datepicker>
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>End date</mat-label>
+                <input matInput [matDatepicker]="endPicker" [(ngModel)]="executionEndDate" (dateChange)="loadExecutions()">
+                <mat-datepicker-toggle matIconSuffix [for]="endPicker"></mat-datepicker-toggle>
+                <mat-datepicker #endPicker></mat-datepicker>
+              </mat-form-field>
+              <button mat-button (click)="clearDateFilters()" *ngIf="executionStartDate || executionEndDate">
+                <mat-icon>clear</mat-icon>
+                Clear dates
+              </button>
             </div>
 
             <div class="execution-list" *ngIf="executions.length > 0">
@@ -611,47 +663,72 @@ import { SailPointSDKService } from '../sailpoint-sdk.service';
               </button>
             </div>
 
-            <div class="empty-panel" *ngIf="executions.length === 0 && !loading">
-              No executions loaded
+            <div class="pagination-controls" *ngIf="executions.length > 0">
+              <mat-form-field appearance="outline" style="width: 100px;">
+                <mat-label>Page size</mat-label>
+                <mat-select [(ngModel)]="pageSize" (selectionChange)="changePageSize()">
+                  <mat-option *ngFor="let size of pageSizes" [value]="size">{{ size }}</mat-option>
+                </mat-select>
+              </mat-form-field>
+              <button mat-icon-button (click)="prevPage()" [disabled]="currentPage === 0" matTooltip="Previous page">
+                <mat-icon>chevron_left</mat-icon>
+              </button>
+              <span>{{ currentPage + 1 }} of {{ Math.ceil(totalExecutions / pageSize) || 1 }}</span>
+              <button mat-icon-button (click)="nextPage()" [disabled]="(currentPage + 1) * pageSize >= totalExecutions" matTooltip="Next page">
+                <mat-icon>chevron_right</mat-icon>
+              </button>
+              <button mat-icon-button (click)="goToFirstPage()" [disabled]="currentPage === 0" matTooltip="First page">
+                <mat-icon>first_page</mat-icon>
+              </button>
+              <button mat-icon-button (click)="goToLastPage()" [disabled]="(currentPage + 1) * pageSize >= totalExecutions" matTooltip="Last page">
+                <mat-icon>last_page</mat-icon>
+              </button>
             </div>
 
-            <div class="execution-detail-grid" *ngIf="executionDetails">
-              <section>
-                <h3>Execution</h3>
-                <div class="json-tree">
-                  <ng-container *ngTemplateOutlet="jsonNode; context: { value: executionDetails, keyName: 'execution', depth: 0 }"></ng-container>
-                </div>
-              </section>
-
-              <section *ngIf="executionHistory && executionHistory.length > 0">
-                <div class="section-title-row">
-                  <h3>Execution flow</h3>
-                  <span class="flow-hint">Click a step to inspect the backend JSON for that node.</span>
-                </div>
-                <div class="flow-board" *ngIf="getExecutionFlowSteps().length > 0; else noFlowDefinition">
-                  <button type="button"
-                          class="flow-node"
-                          *ngFor="let step of getExecutionFlowSteps()"
-                          [class.selected]="selectedExecutionStepKey === step.key"
-                          (click)="selectExecutionStep(step.key, step.step)">
-                    <span class="flow-key">{{ step.key }}</span>
-                    <span class="flow-type">{{ step.step?.type || step.step?.action || step.step?.status || 'Step' }}</span>
-                  </button>
-                </div>
-                <ng-template #noFlowDefinition>
-                  <div class="empty-panel">No execution flow available</div>
-                </ng-template>
-                <div class="flow-details" *ngIf="selectedExecutionStepKey">
-                  <h4>Selected step: {{ selectedExecutionStepKey }}</h4>
-                  <div class="json-tree">
-                    <ng-container *ngTemplateOutlet="jsonNode; context: { value: selectedExecutionStepValue, keyName: selectedExecutionStepKey, depth: 0 }"></ng-container>
-                  </div>
-                </div>
-              </section>
+            <div class="empty-panel" *ngIf="executions.length === 0 && !loading">
+              No executions loaded
             </div>
           </div>
         </mat-tab>
       </mat-tab-group>
+
+      <!-- Execution Flow Popup -->
+      <div *ngIf="showExecutionFlowPopup" class="popup-overlay" (click)="closeExecutionFlowPopup()"></div>
+      <div *ngIf="showExecutionFlowPopup" class="execution-flow-popup">
+        <div class="dialog-header">
+          <h2>Execution Flow: {{ selectedExecutionId }}</h2>
+          <button mat-icon-button (click)="closeExecutionFlowPopup()">
+            <mat-icon>close</mat-icon>
+          </button>
+        </div>
+        <div class="flow-board" *ngIf="getExecutionFlowSteps().length > 0; else noFlowDefinition">
+          <button type="button"
+                  class="flow-node"
+                  *ngFor="let step of getExecutionFlowSteps()"
+                  [class.selected]="selectedExecutionStepKey === step.key"
+                  (click)="selectExecutionStep(step.key, step.step)">
+            <span class="flow-key">{{ step.key }}</span>
+            <span class="flow-type">{{ step.step?.type || step.step?.action || step.step?.status || 'Step' }}</span>
+          </button>
+        </div>
+        <ng-template #noFlowDefinition>
+          <div class="empty-panel">No execution flow available</div>
+        </ng-template>
+      </div>
+
+      <!-- Step Details Popup -->
+      <div *ngIf="showStepDetailsPopup" class="popup-overlay" (click)="closeStepDetailsPopup()"></div>
+      <div *ngIf="showStepDetailsPopup" class="step-details-popup">
+        <div class="dialog-header">
+          <h2>Step Details: {{ selectedExecutionStepKey }}</h2>
+          <button mat-icon-button (click)="closeStepDetailsPopup()">
+            <mat-icon>close</mat-icon>
+          </button>
+        </div>
+        <div class="json-tree">
+          <ng-container *ngTemplateOutlet="jsonNode; context: { value: selectedExecutionStepValue, keyName: selectedExecutionStepKey, depth: 0 }"></ng-container>
+        </div>
+      </div>
 
       <ng-template #jsonNode let-value="value" let-keyName="keyName" let-depth="depth">
         <details *ngIf="isExpandable(value); else primitiveNode" class="json-node" [open]="depth < 2">
@@ -676,12 +753,12 @@ import { SailPointSDKService } from '../sailpoint-sdk.service';
       </ng-template>
 
       <div class="dialog-actions">
-        <button mat-button (click)="toggleEdit()" [disabled]="loading" *ngIf="selectedTab === 'Details'">
+        <button mat-button (click)="toggleEdit()" [disabled]="loading" *ngIf="isEditableTab(selectedTab)">
           {{ editMode ? 'Cancel' : 'Edit' }}
         </button>
 
         <button mat-raised-button color="primary" 
-                *ngIf="editMode && selectedTab === 'Details'" 
+                *ngIf="editMode && isEditableTab(selectedTab)" 
                 (click)="save()"
                 [disabled]="loading">
           <mat-progress-spinner *ngIf="loading" diameter="20" mode="indeterminate" class="spinner"></mat-progress-spinner>
@@ -707,6 +784,7 @@ export class WorkflowDetailsDialogComponent implements OnInit {
   editMode = false;
   loading = false;
   jsonText = '';
+  definitionText = '';
   editData: any = {};
   executionDetails: any = null;
   executionHistory: any = null;
@@ -714,6 +792,8 @@ export class WorkflowDetailsDialogComponent implements OnInit {
   selectedExecutionId = '';
   executionStatusFilter = '';
   executionStatuses = ['Completed', 'Failed', 'Running', 'Canceled', 'Queued'];
+  executionStartDate: Date | null = null;
+  executionEndDate: Date | null = null;
   selectedExecutionStepKey: string | null = null;
   selectedExecutionStepValue: any = null;
   testResult: any = null;
@@ -721,7 +801,14 @@ export class WorkflowDetailsDialogComponent implements OnInit {
   "input": {}
 }`;
 
+  currentPage = 0;
+  pageSize = 20;
+  pageSizes = [5, 10, 20, 50];
+  totalExecutions = 0;
+  showExecutionFlowPopup = false;
+  showStepDetailsPopup = false;
   selectedTab = 'Details';
+  Math = Math;
 
   constructor(
     @Inject(MAT_DIALOG_DATA) public data: any,
@@ -729,8 +816,6 @@ export class WorkflowDetailsDialogComponent implements OnInit {
     private snackBar: MatSnackBar,
     public dialogRef: MatDialogRef<WorkflowDetailsDialogComponent>
   ) {
-    this.editData = { ...data };
-    this.jsonText = JSON.stringify(data, null, 2);
   }
 
   onTabChange(tab: any): void {
@@ -738,37 +823,23 @@ export class WorkflowDetailsDialogComponent implements OnInit {
   }
 
   async ngOnInit(): Promise<void> {
-    this.editData = JSON.parse(JSON.stringify(this.data));
-    this.jsonText = JSON.stringify(this.data, null, 2);
     await this.loadWorkflow();
     this.loadExecutions();
   }
 
-  async loadWorkflow(): Promise<void> {
-    if (!this.data?.id) {
-      return;
-    }
+  private syncEditData(): void {
+    this.editData = JSON.parse(JSON.stringify(this.data));
+    this.jsonText = JSON.stringify(this.data, null, 2);
+    this.definitionText = this.data?.definition ? JSON.stringify(this.data.definition, null, 2) : '';
+  }
 
-    this.loading = true;
-    try {
-      const res = await this.sdk.getWorkflow({ id: this.data.id });
-      this.data = res?.data || res;
-      this.editData = JSON.parse(JSON.stringify(this.data));
-      this.jsonText = JSON.stringify(this.data, null, 2);
-    } catch (e: any) {
-      const errorMessage = e?.response?.data?.message || e?.message || 'Failed to load workflow details';
-      this.showMessage(errorMessage, 'error');
-      console.error('Workflow detail load failed:', e);
-    } finally {
-      this.loading = false;
-    }
+  public isEditableTab(tab: string): boolean {
+    return ['Details', 'JSON', 'Definition'].includes(tab);
   }
 
   toggleEdit(): void {
     if (this.editMode) {
-      // Reset to original data
-      this.editData = JSON.parse(JSON.stringify(this.data));
-      this.jsonText = JSON.stringify(this.data, null, 2);
+      this.syncEditData();
     }
     this.editMode = !this.editMode;
   }
@@ -780,49 +851,71 @@ export class WorkflowDetailsDialogComponent implements OnInit {
     }
 
     this.loading = true;
-
     try {
-      const jsonChanged = this.jsonText !== JSON.stringify(this.editData, null, 2);
-      let updateData = this.editData;
+      let updateData: any = this.editData;
+      const isJsonSave = this.selectedTab === 'JSON';
+      const isDefinitionSave = this.selectedTab === 'Definition';
 
-      if (jsonChanged) {
+      if (isJsonSave) {
         updateData = JSON.parse(this.jsonText);
+      } else if (isDefinitionSave) {
+        const definition = this.definitionText ? JSON.parse(this.definitionText) : null;
+        updateData = { ...this.data, definition };
+      }
+
+      if (isJsonSave || isDefinitionSave) {
         await this.sdk.putWorkflow({
           id: this.data.id,
           workflowBodyV2025: this.cleanWorkflowBody(updateData)
         });
-        this.showMessage('Workflow updated successfully', 'success');
-        this.editMode = false;
-        this.dialogRef.close({ action: 'saved' });
-        return;
-      }
+      } else {
+        const patchOps: any[] = [];
+        if (updateData.name !== this.data.name) {
+          patchOps.push({ op: 'replace', path: '/name', value: updateData.name ?? null });
+        }
+        if (updateData.description !== this.data.description) {
+          patchOps.push({ op: 'replace', path: '/description', value: updateData.description ?? null });
+        }
 
-      const patchOps: any[] = [];
-      if (updateData.name !== this.data.name) {
-        patchOps.push({ op: 'replace', path: '/name', value: updateData.name ?? null });
-      }
-      if (updateData.description !== this.data.description) {
-        patchOps.push({ op: 'replace', path: '/description', value: updateData.description ?? null });
-      }
+        if (patchOps.length === 0) {
+          this.showMessage('No changes detected to save', 'info');
+          return;
+        }
 
-      if (patchOps.length === 0) {
-        this.showMessage('No changes detected to save', 'info');
-        return;
+        await this.sdk.patchWorkflow({
+          id: this.data.id,
+          jsonPatchOperationV2025: patchOps
+        });
       }
-
-      await this.sdk.patchWorkflow({
-        id: this.data.id,
-        jsonPatchOperationV2025: patchOps
-      });
 
       this.showMessage('Workflow updated successfully', 'success');
       this.editMode = false;
+      await this.loadWorkflow();
+      this.syncEditData();
       this.dialogRef.close({ action: 'saved' });
-
     } catch (e: any) {
       const errorMessage = e?.response?.data?.message || e?.message || 'Save failed';
       this.showMessage(errorMessage, 'error');
       console.error('Save error:', e);
+    } finally {
+      this.loading = false;
+    }
+  }
+
+  async loadWorkflow(): Promise<void> {
+    if (!this.data?.id) {
+      return;
+    }
+
+    this.loading = true;
+    try {
+      const res = await this.sdk.getWorkflow({ id: this.data.id });
+      this.data = res?.data || res;
+      this.syncEditData();
+    } catch (e: any) {
+      const errorMessage = e?.response?.data?.message || e?.message || 'Failed to load workflow details';
+      this.showMessage(errorMessage, 'error');
+      console.error('Workflow detail load failed:', e);
     } finally {
       this.loading = false;
     }
@@ -899,10 +992,16 @@ export class WorkflowDetailsDialogComponent implements OnInit {
       // Automatically load history for flow visualization
       await this.loadExecutionHistory(executionId);
 
+      // Open execution flow popup
+      this.showExecutionFlowPopup = true;
+
       // Auto-select first step if available
       if (Array.isArray(this.executionHistory) && this.executionHistory.length > 0) {
         const firstStep = this.executionHistory[0];
-        this.selectExecutionStep(firstStep.stepId || firstStep.name || '0', firstStep);
+        const stepType = firstStep.type || firstStep.action || 'Unknown';
+        const stepName = firstStep.attributes?.stepName || firstStep.name || 'Step';
+        const key = `0 : ${stepType}-${stepName}`;
+        this.selectExecutionStep(key, firstStep);
       }
 
     } catch (e) {
@@ -924,15 +1023,17 @@ export class WorkflowDetailsDialogComponent implements OnInit {
     this.selectedExecutionStepValue = null;
 
     this.loading = true;
+    
     try {
       const res = await this.sdk.getWorkflowExecutions({
         id: this.data.id,
-        limit: 250,
-        offset: 0,
+        limit: this.pageSize,
+        offset: this.currentPage * this.pageSize,
         filters: this.getExecutionStatusFilter()
       });
       const payload = res?.data || res;
       this.executions = this.extractExecutions(payload);
+      this.totalExecutions = (payload as any)?.totalCount || (payload as any)?.count || this.executions.length;
       if (this.executions.length === 0) {
         this.showMessage('No executions found', 'info');
       }
@@ -945,18 +1046,83 @@ export class WorkflowDetailsDialogComponent implements OnInit {
     }
   }
 
-  private getExecutionStatusFilter(): string | undefined {
-    return this.executionStatusFilter ? `status eq "${this.executionStatusFilter}"` : undefined;
-  }
-
   private extractExecutions(payload: any): any[] {
+    if (!payload) {
+      return [];
+    }
     if (Array.isArray(payload)) {
       return payload;
     }
-    if (Array.isArray(payload?.items)) {
+    if (Array.isArray(payload.items)) {
       return payload.items;
     }
+    if (Array.isArray(payload.executions)) {
+      return payload.executions;
+    }
+    if (Array.isArray(payload.data)) {
+      return payload.data;
+    }
     return [];
+  }
+
+  private getExecutionStatusFilter(): string | undefined {
+    const filters: string[] = [];
+    
+    if (this.executionStatusFilter) {
+      filters.push(`status eq "${this.executionStatusFilter}"`);
+    }
+    
+    if (this.executionStartDate) {
+      const startDate = this.executionStartDate.toISOString().split('T')[0];
+      filters.push(`startTime ge "${startDate}T00:00:00.000Z"`);
+    }
+    
+    if (this.executionEndDate) {
+      const endDate = this.executionEndDate.toISOString().split('T')[0];
+      filters.push(`startTime le "${endDate}T23:59:59.999Z"`);
+    }
+    
+    return filters.length > 0 ? filters.join(' and ') : undefined;
+  }
+
+  clearDateFilters(): void {
+    this.executionStartDate = null;
+    this.executionEndDate = null;
+    this.loadExecutions();
+  }
+
+  goToFirstPage(): void {
+    if (this.currentPage > 0) {
+      this.currentPage = 0;
+      this.loadExecutions();
+    }
+  }
+
+  changePageSize(): void {
+    this.currentPage = 0;
+    this.loadExecutions();
+  }
+
+  nextPage(): void {
+    if ((this.currentPage + 1) * this.pageSize < this.totalExecutions) {
+      this.currentPage++;
+      this.loadExecutions();
+    }
+  }
+
+  prevPage(): void {
+    if (this.currentPage > 0) {
+      this.currentPage--;
+      this.loadExecutions();
+    }
+  }
+
+  goToLastPage(): void {
+    const totalPages = Math.ceil(this.totalExecutions / this.pageSize);
+    if (this.currentPage < totalPages - 1) {
+      this.currentPage = totalPages - 1;
+      this.loadExecutions();
+    }
   }
 
   async loadExecutionHistory(executionId: string): Promise<void> {
@@ -1044,15 +1210,28 @@ export class WorkflowDetailsDialogComponent implements OnInit {
       return [];
     }
 
-    return this.executionHistory.map((step: any, index: number) => ({
-      key: step.stepId || step.name || `step-${index}`,
-      step: step
-    }));
+    return this.executionHistory.map((step: any, index: number) => {
+      const stepType = step.type || step.action || 'Unknown';
+      const stepName = step.attributes?.stepName || step.name || 'Step';
+      const key = `${index} : ${stepType}-${stepName}`;
+      return { key, step };
+    });
   }
 
   selectExecutionStep(stepKey: string, stepValue: any): void {
     this.selectedExecutionStepKey = stepKey;
     this.selectedExecutionStepValue = this.findExecutionStepJson(stepKey) || stepValue;
+    this.showStepDetailsPopup = true;
+  }
+
+  closeExecutionFlowPopup(): void {
+    this.showExecutionFlowPopup = false;
+    this.selectedExecutionStepKey = null;
+    this.selectedExecutionStepValue = null;
+  }
+
+  closeStepDetailsPopup(): void {
+    this.showStepDetailsPopup = false;
   }
 
   private findExecutionStepJson(stepKey: string): any {
@@ -1061,7 +1240,7 @@ export class WorkflowDetailsDialogComponent implements OnInit {
     }
 
     return this.executionHistory.find((item: any) =>
-      (item?.stepId || item?.name || `step-${this.executionHistory.indexOf(item)}`) === stepKey
+      (item?.stepId || item?.name || `${this.executionHistory.indexOf(item)}`) === stepKey
     ) || null;
   }
 
