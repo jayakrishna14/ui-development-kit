@@ -1,5 +1,4 @@
 import { Component, Inject, OnInit } from '@angular/core';
-import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { CommonModule } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -8,10 +7,12 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { FormsModule } from '@angular/forms';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatSnackBarModule, MatSnackBar } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
+import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { SailPointSDKService } from '../sailpoint-sdk.service';
+
 @Component({
   selector: 'app-workflow-details-dialog',
   standalone: true,
@@ -28,286 +29,64 @@ import { SailPointSDKService } from '../sailpoint-sdk.service';
     MatProgressSpinnerModule,
     MatSelectModule
   ],
-  template: `
-    <div class="dialog-container">
-      <div class="dialog-header">
-        <h2 mat-dialog-title>{{ data?.name || 'Workflow Details' }}</h2>
-        <button mat-stroked-button (click)="loadWorkflow()" [disabled]="loading || !data?.id">
-          <mat-icon>sync</mat-icon>
-          Refresh detail
-        </button>
-      </div>
-
-      <mat-tab-group>
-        <!-- VIEW TAB -->
-        <mat-tab label="Details">
-          <ng-template mat-tab-label>
-            <mat-icon class="tab-icon">info</mat-icon>
-            Details
-          </ng-template>
-          
-          <div class="tab-content">
-            <div *ngIf="!editMode" class="view-mode">
-              <div class="info-grid">
-                <div class="info-item">
-                  <label>ID:</label>
-                  <code>{{ data?.id || '—' }}</code>
-                </div>
-                
-                <div class="info-item">
-                  <label>Name:</label>
-                  <span>{{ data?.name || '—' }}</span>
-                </div>
-
-                <div class="info-item">
-                  <label>Description:</label>
-                  <span>{{ data?.description || '—' }}</span>
-                </div>
-
-                <div class="info-item">
-                  <label>Status:</label>
-                  <span [ngClass]="data?.enabled ? 'enabled-text' : 'disabled-text'">
-                    {{ data?.enabled ? '✓ Enabled' : '✗ Disabled' }}
-                  </span>
-                </div>
-
-                <div class="info-item">
-                  <label>Created:</label>
-                  <span>{{ data?.created ? (data.created | date:'medium') : '—' }}</span>
-                </div>
-
-                <div class="info-item">
-                  <label>Modified:</label>
-                  <span>{{ data?.modified ? (data.modified | date:'medium') : '—' }}</span>
-                </div>
-
-                <div class="info-item">
-                  <label>Executions:</label>
-                  <span>{{ data?.executionCount || 0 }}</span>
-                </div>
-              
-
-                <div class="info-item">
-                  <label>Failures:</label>
-                  <span class="failure-count">{{ data?.failureCount || 0 }}</span>
-                </div>
-
-                <div class="info-item">
-                  <label>Steps:</label>
-                  <span>{{ getStepCount(data) }}</span>
-                </div>
-
-                <div class="info-item">
-                  <label>Definition size:</label>
-                  <span>{{ getDefinitionSize(data) }}</span>
-                </div>
-
-                <div class="info-item full-width" *ngIf="data?.owner">
-                  <label>Owner:</label>
-                  <span>{{ data?.owner?.name || data?.owner?.id || '—' }}</span>
-                </div>
-
-                <div class="info-item full-width" *ngIf="data?.creator">
-                  <label>Created By:</label>
-                  <span>{{ data?.creator?.name || '—' }}</span>
-                </div>
-
-                <div class="info-item full-width" *ngIf="data?.modifiedBy">
-                  <label>Modified By:</label>
-                  <span>{{ data?.modifiedBy?.name || '—' }}</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- EDIT MODE -->
-            <div *ngIf="editMode" class="edit-mode">
-              <mat-form-field appearance="outline" class="full-width">
-                <mat-label>Name</mat-label>
-                <input matInput [(ngModel)]="editData.name" placeholder="Workflow name">
-              </mat-form-field>
-
-              <mat-form-field appearance="outline" class="full-width">
-                <mat-label>Description</mat-label>
-                <textarea matInput [(ngModel)]="editData.description" rows="4" placeholder="Workflow description"></textarea>
-              </mat-form-field>
-            </div>
-          </div>
-        </mat-tab>
-
-        <!-- JSON TAB -->
-        <mat-tab label="JSON">
-          <ng-template mat-tab-label>
-            <mat-icon class="tab-icon">code</mat-icon>
-            JSON
-          </ng-template>
-          
-          <div class="tab-content">
-            <div *ngIf="!editMode" class="json-tree">
-              <ng-container *ngTemplateOutlet="jsonNode; context: { value: data, keyName: '', depth: 0 }"></ng-container>
-            </div>
-
-            <div *ngIf="editMode" class="json-edit">
-              <textarea [(ngModel)]="jsonText" class="json-editor"></textarea>
-            </div>
-          </div>
-        </mat-tab>
-
-        <!-- DEFINITION TAB -->
-        <mat-tab label="Definition">
-          <ng-template mat-tab-label>
-            <mat-icon class="tab-icon">settings</mat-icon>
-            Definition
-          </ng-template>
-          
-          <div class="tab-content">
-            <div class="json-tree" *ngIf="data?.definition; else noDefinition">
-              <ng-container *ngTemplateOutlet="jsonNode; context: { value: data.definition, keyName: 'definition', depth: 0 }"></ng-container>
-            </div>
-            <ng-template #noDefinition>
-              <div class="empty-panel">No definition available</div>
-            </ng-template>
-          </div>
-        </mat-tab>
-
-        <!-- RUN TAB -->
-        <mat-tab label="Run">
-          <ng-template mat-tab-label>
-            <mat-icon class="tab-icon">play_circle</mat-icon>
-            Run
-          </ng-template>
-          
-          <div class="tab-content">
-            <p class="test-description">Send a JSON payload to the workflow and inspect the response below.</p>
-
-            <mat-form-field appearance="outline" class="full-width">
-              <mat-label>Test payload</mat-label>
-              <textarea matInput rows="8" [(ngModel)]="testInputText"></textarea>
-            </mat-form-field>
-
-            <div class="test-actions">
-              <button mat-raised-button color="accent" (click)="testWorkflow()" [disabled]="data?.enabled || loading">
-                <mat-icon>play_arrow</mat-icon>
-                {{ loading ? 'Running...' : 'Run test' }}
-              </button>
-            </div>
-
-            <div *ngIf="testResult" class="test-result">
-              <h3>Test response</h3>
-              <pre class="json-view">{{ testResult | json }}</pre>
-            </div>
-          </div>
-        </mat-tab>
-
-        <!-- EXECUTIONS TAB -->
-        <mat-tab label="Executions">
-          <ng-template mat-tab-label>
-            <mat-icon class="tab-icon">history</mat-icon>
-            Executions
-          </ng-template>
-
-          <div class="tab-content executions-tab">
-            <div class="execution-toolbar">
-              <button mat-raised-button color="primary" (click)="loadExecutions()" [disabled]="loading">
-                <mat-icon>sync</mat-icon>
-                Load executions
-              </button>
-              <mat-form-field appearance="outline">
-                <mat-label>Status filter</mat-label>
-                <mat-select [(ngModel)]="executionStatusFilter" (selectionChange)="loadExecutions()">
-                  <mat-option value="">All statuses</mat-option>
-                  <mat-option *ngFor="let status of executionStatuses" [value]="status">{{ status }}</mat-option>
-                </mat-select>
-              </mat-form-field>
-            </div>
-
-            <div class="execution-list" *ngIf="executions.length > 0">
-              <button class="execution-row"
-                      *ngFor="let execution of executions"
-                      (click)="loadExecutionDetails(execution.id)"
-                      [class.active]="selectedExecutionId === execution.id">
-                <span class="execution-status">{{ execution.status || 'Unknown' }}</span>
-                <span>{{ execution.startTime || execution.created || execution.id }}</span>
-                <mat-icon>chevron_right</mat-icon>
-              </button>
-            </div>
-
-            <div class="empty-panel" *ngIf="executions.length === 0 && !loading">
-              No executions loaded
-            </div>
-
-            <div class="execution-detail-grid" *ngIf="executionDetails">
-              <section>
-                <h3>Execution</h3>
-                <div class="json-tree">
-                  <ng-container *ngTemplateOutlet="jsonNode; context: { value: executionDetails, keyName: 'execution', depth: 0 }"></ng-container>
-                </div>
-              </section>
-
-              <section>
-                <div class="section-title-row">
-                  <h3>History</h3>
-                  <button mat-stroked-button (click)="loadExecutionHistory(selectedExecutionId)" [disabled]="!selectedExecutionId || loading">
-                    <mat-icon>timeline</mat-icon>
-                    Load history
-                  </button>
-                </div>
-                <div class="json-tree" *ngIf="executionHistory">
-                  <ng-container *ngTemplateOutlet="jsonNode; context: { value: executionHistory, keyName: 'history', depth: 0 }"></ng-container>
-                </div>
-              </section>
-            </div>
-          </div>
-        </mat-tab>
-      </mat-tab-group>
-
-      <ng-template #jsonNode let-value="value" let-keyName="keyName" let-depth="depth">
-        <details *ngIf="isExpandable(value); else primitiveNode" class="json-node" [open]="depth < 2">
-          <summary>
-            <span class="json-key" *ngIf="keyName">{{ keyName }}:</span>
-            <span class="json-brace">{{ isArray(value) ? '[' : '{' }}</span>
-            <span class="json-muted">{{ getNodeSummary(value) }}</span>
-          </summary>
-          <div class="json-children">
-            <div *ngFor="let key of getObjectKeys(value)" class="json-line">
-              <ng-container *ngTemplateOutlet="jsonNode; context: { value: value[key], keyName: key, depth: depth + 1 }"></ng-container>
-            </div>
-          </div>
-          <span class="json-brace">{{ isArray(value) ? ']' : '}' }}</span>
-        </details>
-        <ng-template #primitiveNode>
-          <div class="json-leaf">
-            <span class="json-key" *ngIf="keyName">{{ keyName }}:</span>
-            <span [ngClass]="getPrimitiveClass(value)">{{ formatPrimitive(value) }}</span>
-          </div>
-        </ng-template>
-      </ng-template>
-
-      <div class="dialog-actions">
-        <button mat-button (click)="toggleEdit()" [disabled]="loading">
-          {{ editMode ? 'Cancel' : 'Edit' }}
-        </button>
-
-        <button mat-raised-button color="primary" 
-                *ngIf="editMode" 
-                (click)="save()"
-                [disabled]="loading">
-          <mat-progress-spinner *ngIf="loading" diameter="20" mode="indeterminate" class="spinner"></mat-progress-spinner>
-          {{ loading ? 'Saving...' : 'Save Changes' }}
-        </button>
-
-        <button mat-raised-button color="accent" 
-                (click)="testWorkflow()"
-                [disabled]="data?.enabled || loading"
-                [matTooltip]="data?.enabled ? 'Disable workflow before testing' : ''">
-          <mat-icon>play_arrow</mat-icon>
-          Test Workflow
-        </button>
-
-        <button mat-button (click)="closeDialog()">Close</button>
-      </div>
-    </div>
-  `,
-  styles: [`
+  styles: [
+    `
+    .flow-board {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      padding: 0.5rem 0;
+    }
+    .flow-node {
+      min-width: 140px;
+      padding: 0.8rem 1rem;
+      border: 1px solid #d0d0d0;
+      border-radius: 10px;
+      background: #fafafa;
+      color: #1f1f1f;
+      text-align: left;
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+    }
+    .flow-node:hover {
+      background: #f1f6ff;
+      transform: translateY(-1px);
+    }
+    .flow-node.selected {
+      background: #e7f0ff;
+      border-color: #4d7cff;
+    }
+    .flow-key {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 0.2rem;
+    }
+    .flow-type {
+      display: block;
+      font-size: 0.87rem;
+      color: #555;
+    }
+    .flow-details {
+      margin-top: 1rem;
+      padding: 1rem;
+      border: 1px solid #dde2ea;
+      border-radius: 10px;
+      background: #ffffff;
+    }
+    .flow-hint {
+      margin-left: auto;
+      font-size: 0.92rem;
+      color: #666;
+    }
+    .empty-panel {
+      padding: 0.9rem 1rem;
+      border-radius: 8px;
+      border: 1px dashed #c6c6c6;
+      background: #fbfbfb;
+      color: #5e5e5e;
+    }
+    `,
+    `
     .dialog-container {
       display: flex;
       flex-direction: column;
@@ -628,7 +407,312 @@ import { SailPointSDKService } from '../sailpoint-sdk.service';
         border-bottom: 1px solid #e0e0e0;
       }
     }
-  `]
+    `
+  ],
+  template: `
+    <div class="dialog-container">
+      <div class="dialog-header">
+        <h2 mat-dialog-title>{{ data?.name || 'Workflow Details' }}</h2>
+        <button mat-stroked-button (click)="loadWorkflow()" [disabled]="loading || !data?.id">
+          <mat-icon>sync</mat-icon>
+          Refresh detail
+        </button>
+      </div>
+
+      <mat-tab-group>
+        <!-- VIEW TAB -->
+        <mat-tab label="Details">
+          <ng-template mat-tab-label>
+            <mat-icon class="tab-icon">info</mat-icon>
+            Details
+          </ng-template>
+          
+          <div class="tab-content">
+            <div *ngIf="!editMode" class="view-mode">
+              <div class="info-grid">
+                <div class="info-item">
+                  <label>ID:</label>
+                  <code>{{ data?.id || '—' }}</code>
+                </div>
+                
+                <div class="info-item">
+                  <label>Name:</label>
+                  <span>{{ data?.name || '—' }}</span>
+                </div>
+
+                <div class="info-item">
+                  <label>Description:</label>
+                  <span>{{ data?.description || '—' }}</span>
+                </div>
+
+                <div class="info-item">
+                  <label>Status:</label>
+                  <span [ngClass]="data?.enabled ? 'enabled-text' : 'disabled-text'">
+                    {{ data?.enabled ? '✓ Enabled' : '✗ Disabled' }}
+                  </span>
+                </div>
+
+                <div class="info-item">
+                  <label>Created:</label>
+                  <span>{{ data?.created ? (data.created | date:'medium') : '—' }}</span>
+                </div>
+
+                <div class="info-item">
+                  <label>Modified:</label>
+                  <span>{{ data?.modified ? (data.modified | date:'medium') : '—' }}</span>
+                </div>
+
+                <div class="info-item">
+                  <label>Executions:</label>
+                  <span>{{ getExecutionCount(data) }}</span>
+                </div>
+
+                <div class="info-item">
+                  <label>Failures:</label>
+                  <span class="failure-count">{{ getFailureCount(data) }}</span>
+                </div>
+
+                <div class="info-item">
+                  <label>Steps:</label>
+                  <span>{{ getStepCount(data) }}</span>
+                </div>
+
+                <div class="info-item">
+                  <label>Definition size:</label>
+                  <span>{{ getDefinitionSize(data) }}</span>
+                </div>
+
+                <div class="info-item full-width" *ngIf="data?.owner">
+                  <label>Owner:</label>
+                  <span>{{ data?.owner?.name || data?.owner?.id || '—' }}</span>
+                </div>
+
+                <div class="info-item full-width" *ngIf="data?.creator">
+                  <label>Created By:</label>
+                  <span>{{ data?.creator?.name || '—' }}</span>
+                </div>
+
+                <div class="info-item full-width" *ngIf="data?.modifiedBy">
+                  <label>Modified By:</label>
+                  <span>{{ data?.modifiedBy?.name || '—' }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- EDIT MODE -->
+            <div *ngIf="editMode" class="edit-mode">
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Name</mat-label>
+                <input matInput [(ngModel)]="editData.name" placeholder="Workflow name">
+              </mat-form-field>
+
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Description</mat-label>
+                <textarea matInput [(ngModel)]="editData.description" rows="4" placeholder="Workflow description"></textarea>
+              </mat-form-field>
+            </div>
+          </div>
+        </mat-tab>
+
+        <!-- JSON TAB -->
+        <mat-tab label="JSON">
+          <ng-template mat-tab-label>
+            <mat-icon class="tab-icon">code</mat-icon>
+            JSON
+          </ng-template>
+          
+          <div class="tab-content">
+            <div *ngIf="!editMode" class="json-tree">
+              <ng-container *ngTemplateOutlet="jsonNode; context: { value: data, keyName: '', depth: 0 }"></ng-container>
+            </div>
+
+            <div *ngIf="editMode" class="json-edit">
+              <textarea [(ngModel)]="jsonText" class="json-editor"></textarea>
+            </div>
+          </div>
+        </mat-tab>
+
+        <!-- DEFINITION TAB -->
+        <mat-tab label="Definition">
+          <ng-template mat-tab-label>
+            <mat-icon class="tab-icon">settings</mat-icon>
+            Definition
+          </ng-template>
+          
+          <div class="tab-content">
+            <div class="json-tree" *ngIf="data?.definition; else noDefinition">
+              <ng-container *ngTemplateOutlet="jsonNode; context: { value: data.definition, keyName: 'definition', depth: 0 }"></ng-container>
+            </div>
+            <ng-template #noDefinition>
+              <div class="empty-panel">No definition available</div>
+            </ng-template>
+          </div>
+        </mat-tab>
+
+        <!-- RUN TAB -->
+        <mat-tab label="Run">
+          <ng-template mat-tab-label>
+            <mat-icon class="tab-icon">play_circle</mat-icon>
+            Run
+          </ng-template>
+          
+          <div class="tab-content">
+            <p class="test-description">Send a JSON payload to the workflow and inspect the response below.</p>
+
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Test payload</mat-label>
+              <textarea matInput rows="8" [(ngModel)]="testInputText"></textarea>
+            </mat-form-field>
+
+            <div class="test-actions">
+              <button mat-raised-button color="accent" (click)="testWorkflow()" [disabled]="data?.enabled || loading">
+                <mat-icon>play_arrow</mat-icon>
+                {{ loading ? 'Running...' : 'Run test' }}
+              </button>
+            </div>
+
+            <div *ngIf="testResult" class="test-result">
+              <h3>Test response</h3>
+              <pre class="json-view">{{ testResult | json }}</pre>
+            </div>
+          </div>
+        </mat-tab>
+
+        <!-- EXECUTIONS TAB -->
+        <mat-tab label="Executions">
+          <ng-template mat-tab-label>
+            <mat-icon class="tab-icon">history</mat-icon>
+            Executions
+          </ng-template>
+
+          <div class="tab-content executions-tab">
+            <div class="execution-toolbar">
+              <button mat-raised-button color="primary" (click)="loadExecutions()" [disabled]="loading">
+                <mat-icon>sync</mat-icon>
+                Load executions
+              </button>
+              <mat-form-field appearance="outline">
+                <mat-label>Status filter</mat-label>
+                <mat-select [(ngModel)]="executionStatusFilter" (selectionChange)="loadExecutions()">
+                  <mat-option value="">All statuses</mat-option>
+                  <mat-option *ngFor="let status of executionStatuses" [value]="status">{{ status }}</mat-option>
+                </mat-select>
+              </mat-form-field>
+            </div>
+
+            <div class="execution-list" *ngIf="executions.length > 0">
+              <button class="execution-row"
+                      *ngFor="let execution of executions"
+                      (click)="loadExecutionDetails(getExecutionId(execution))"
+                      [class.active]="selectedExecutionId === getExecutionId(execution)">
+                <span class="execution-status">{{ execution.status || 'Unknown' }}</span>
+                <span>{{ execution.startTime || execution.created || getExecutionId(execution) }}</span>
+                <mat-icon>chevron_right</mat-icon>
+              </button>
+            </div>
+
+            <div class="empty-panel" *ngIf="executions.length === 0 && !loading">
+              No executions loaded
+            </div>
+
+            <div class="execution-detail-grid" *ngIf="executionDetails">
+              <section>
+                <h3>Execution</h3>
+                <div class="json-tree">
+                  <ng-container *ngTemplateOutlet="jsonNode; context: { value: executionDetails, keyName: 'execution', depth: 0 }"></ng-container>
+                </div>
+              </section>
+
+              <section *ngIf="data?.definition">
+                <div class="section-title-row">
+                  <h3>Execution flow</h3>
+                  <span class="flow-hint">Click a step to inspect the backend JSON for that node.</span>
+                </div>
+                <div class="flow-board" *ngIf="getFlowSteps().length > 0; else noFlowDefinition">
+                  <button type="button"
+                          class="flow-node"
+                          *ngFor="let step of getFlowSteps()"
+                          [class.selected]="selectedExecutionStepKey === step.key"
+                          (click)="selectExecutionStep(step.key, step.step)">
+                    <span class="flow-key">{{ step.key }}</span>
+                    <span class="flow-type">{{ step.step?.type || step.step?.action || 'Step' }}</span>
+                  </button>
+                </div>
+                <ng-template #noFlowDefinition>
+                  <div class="empty-panel">No flow definition available</div>
+                </ng-template>
+                <div class="flow-details" *ngIf="selectedExecutionStepKey">
+                  <h4>Selected step: {{ selectedExecutionStepKey }}</h4>
+                  <div class="json-tree">
+                    <ng-container *ngTemplateOutlet="jsonNode; context: { value: selectedExecutionStepValue, keyName: selectedExecutionStepKey, depth: 0 }"></ng-container>
+                  </div>
+                </div>
+              </section>
+
+              <section>
+                <div class="section-title-row">
+                  <h3>History</h3>
+                  <button mat-stroked-button (click)="loadExecutionHistory(selectedExecutionId)" [disabled]="!selectedExecutionId || loading">
+                    <mat-icon>timeline</mat-icon>
+                    Load history
+                  </button>
+                </div>
+                <div class="json-tree" *ngIf="executionHistory">
+                  <ng-container *ngTemplateOutlet="jsonNode; context: { value: executionHistory, keyName: 'history', depth: 0 }"></ng-container>
+                </div>
+              </section>
+            </div>
+          </div>
+        </mat-tab>
+      </mat-tab-group>
+
+      <ng-template #jsonNode let-value="value" let-keyName="keyName" let-depth="depth">
+        <details *ngIf="isExpandable(value); else primitiveNode" class="json-node" [open]="depth < 2">
+          <summary>
+            <span class="json-key" *ngIf="keyName">{{ keyName }}:</span>
+            <span class="json-brace">{{ isArray(value) ? '[' : '{' }}</span>
+            <span class="json-muted">{{ getNodeSummary(value) }}</span>
+          </summary>
+          <div class="json-children">
+            <div *ngFor="let key of getObjectKeys(value)" class="json-line">
+              <ng-container *ngTemplateOutlet="jsonNode; context: { value: value[key], keyName: key, depth: depth + 1 }"></ng-container>
+            </div>
+          </div>
+          <span class="json-brace">{{ isArray(value) ? ']' : '}' }}</span>
+        </details>
+        <ng-template #primitiveNode>
+          <div class="json-leaf">
+            <span class="json-key" *ngIf="keyName">{{ keyName }}:</span>
+            <span [ngClass]="getPrimitiveClass(value)">{{ formatPrimitive(value) }}</span>
+          </div>
+        </ng-template>
+      </ng-template>
+
+      <div class="dialog-actions">
+        <button mat-button (click)="toggleEdit()" [disabled]="loading">
+          {{ editMode ? 'Cancel' : 'Edit' }}
+        </button>
+
+        <button mat-raised-button color="primary" 
+                *ngIf="editMode" 
+                (click)="save()"
+                [disabled]="loading">
+          <mat-progress-spinner *ngIf="loading" diameter="20" mode="indeterminate" class="spinner"></mat-progress-spinner>
+          {{ loading ? 'Saving...' : 'Save Changes' }}
+        </button>
+
+        <button mat-raised-button color="accent" 
+                (click)="testWorkflow()"
+                [disabled]="data?.enabled || loading"
+                [matTooltip]="data?.enabled ? 'Disable workflow before testing' : ''">
+          <mat-icon>play_arrow</mat-icon>
+          Test Workflow
+        </button>
+
+        <button mat-button (click)="closeDialog()">Close</button>
+      </div>
+    </div>
+  `
 })
 export class WorkflowDetailsDialogComponent implements OnInit {
 
@@ -641,7 +725,9 @@ export class WorkflowDetailsDialogComponent implements OnInit {
   executions: any[] = [];
   selectedExecutionId = '';
   executionStatusFilter = '';
-  executionStatuses = ['COMPLETED', 'FAILED', 'RUNNING', 'CANCELED', 'TERMINATED'];
+  executionStatuses = ['Completed', 'Failed', 'Running', 'Canceled', 'Queued'];
+  selectedExecutionStepKey: string | null = null;
+  selectedExecutionStepValue: any = null;
   testResult: any = null;
   testInputText = `{
   "input": {}
@@ -657,10 +743,11 @@ export class WorkflowDetailsDialogComponent implements OnInit {
     this.jsonText = JSON.stringify(data, null, 2);
   }
 
-  ngOnInit(): void {
+  async ngOnInit(): Promise<void> {
     this.editData = JSON.parse(JSON.stringify(this.data));
     this.jsonText = JSON.stringify(this.data, null, 2);
-    this.loadWorkflow();
+    await this.loadWorkflow();
+    this.loadExecutions();
   }
 
   async loadWorkflow(): Promise<void> {
@@ -674,6 +761,11 @@ export class WorkflowDetailsDialogComponent implements OnInit {
       this.data = res?.data || res;
       this.editData = JSON.parse(JSON.stringify(this.data));
       this.jsonText = JSON.stringify(this.data, null, 2);
+
+      const flowSteps = this.getFlowSteps();
+      if (flowSteps.length && !this.selectedExecutionStepKey) {
+        this.selectExecutionStep(flowSteps[0].key, flowSteps[0].step);
+      }
     } catch (e: any) {
       const errorMessage = e?.response?.data?.message || e?.message || 'Failed to load workflow details';
       this.showMessage(errorMessage, 'error');
@@ -824,6 +916,13 @@ export class WorkflowDetailsDialogComponent implements OnInit {
       return;
     }
 
+    this.executions = [];
+    this.selectedExecutionId = '';
+    this.executionDetails = null;
+    this.executionHistory = null;
+    this.selectedExecutionStepKey = null;
+    this.selectedExecutionStepValue = null;
+
     this.loading = true;
     try {
       const res = await this.sdk.getWorkflowExecutions({
@@ -913,6 +1012,62 @@ export class WorkflowDetailsDialogComponent implements OnInit {
       return 'json-null';
     }
     return `json-${typeof value}`;
+  }
+
+  getExecutionId(execution: any): string {
+    return execution?.id || execution?.workflowExecutionId || '';
+  }
+
+  getExecutionCount(workflow: any): number {
+    const value = workflow?.executionCount
+      ?? workflow?.executionsCount
+      ?? workflow?.executionStats?.total
+      ?? workflow?.executionStats?.count
+      ?? workflow?.stats?.executionCount
+      ?? workflow?.stats?.executions;
+
+    return Number.isFinite(Number(value)) ? Number(value) : 0;
+  }
+
+  getFailureCount(workflow: any): number {
+    const value = workflow?.failureCount
+      ?? workflow?.failedExecutionCount
+      ?? workflow?.executionStats?.failed
+      ?? workflow?.executionStats?.failureCount
+      ?? workflow?.stats?.failureCount;
+
+    return Number.isFinite(Number(value)) ? Number(value) : 0;
+  }
+
+  getFlowSteps(): Array<{ key: string; step: any }> {
+    const definition = this.data?.definition;
+    if (!definition) {
+      return [];
+    }
+
+    const steps = definition.steps ?? definition.nodes;
+    if (!steps || typeof steps !== 'object') {
+      return [];
+    }
+
+    return Object.entries(steps).map(([key, value]) => ({ key, step: value }));
+  }
+
+  selectExecutionStep(stepKey: string, stepValue: any): void {
+    this.selectedExecutionStepKey = stepKey;
+    this.selectedExecutionStepValue = this.findExecutionStepJson(stepKey) || stepValue;
+  }
+
+  private findExecutionStepJson(stepKey: string): any {
+    if (!Array.isArray(this.executionHistory)) {
+      return null;
+    }
+
+    return this.executionHistory.find((item: any) =>
+      item?.stepId === stepKey ||
+      item?.step?.id === stepKey ||
+      item?.name === stepKey
+    ) || null;
   }
 
   getStepCount(workflow: any): number {
