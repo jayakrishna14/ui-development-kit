@@ -419,7 +419,7 @@ import { SailPointSDKService } from '../sailpoint-sdk.service';
         </button>
       </div>
 
-      <mat-tab-group>
+      <mat-tab-group (selectedTabChange)="onTabChange($event)">
         <!-- VIEW TAB -->
         <mat-tab label="Details">
           <ng-template mat-tab-label>
@@ -623,42 +623,29 @@ import { SailPointSDKService } from '../sailpoint-sdk.service';
                 </div>
               </section>
 
-              <section *ngIf="data?.definition">
+              <section *ngIf="executionHistory && executionHistory.length > 0">
                 <div class="section-title-row">
                   <h3>Execution flow</h3>
                   <span class="flow-hint">Click a step to inspect the backend JSON for that node.</span>
                 </div>
-                <div class="flow-board" *ngIf="getFlowSteps().length > 0; else noFlowDefinition">
+                <div class="flow-board" *ngIf="getExecutionFlowSteps().length > 0; else noFlowDefinition">
                   <button type="button"
                           class="flow-node"
-                          *ngFor="let step of getFlowSteps()"
+                          *ngFor="let step of getExecutionFlowSteps()"
                           [class.selected]="selectedExecutionStepKey === step.key"
                           (click)="selectExecutionStep(step.key, step.step)">
                     <span class="flow-key">{{ step.key }}</span>
-                    <span class="flow-type">{{ step.step?.type || step.step?.action || 'Step' }}</span>
+                    <span class="flow-type">{{ step.step?.type || step.step?.action || step.step?.status || 'Step' }}</span>
                   </button>
                 </div>
                 <ng-template #noFlowDefinition>
-                  <div class="empty-panel">No flow definition available</div>
+                  <div class="empty-panel">No execution flow available</div>
                 </ng-template>
                 <div class="flow-details" *ngIf="selectedExecutionStepKey">
                   <h4>Selected step: {{ selectedExecutionStepKey }}</h4>
                   <div class="json-tree">
                     <ng-container *ngTemplateOutlet="jsonNode; context: { value: selectedExecutionStepValue, keyName: selectedExecutionStepKey, depth: 0 }"></ng-container>
                   </div>
-                </div>
-              </section>
-
-              <section>
-                <div class="section-title-row">
-                  <h3>History</h3>
-                  <button mat-stroked-button (click)="loadExecutionHistory(selectedExecutionId)" [disabled]="!selectedExecutionId || loading">
-                    <mat-icon>timeline</mat-icon>
-                    Load history
-                  </button>
-                </div>
-                <div class="json-tree" *ngIf="executionHistory">
-                  <ng-container *ngTemplateOutlet="jsonNode; context: { value: executionHistory, keyName: 'history', depth: 0 }"></ng-container>
                 </div>
               </section>
             </div>
@@ -689,12 +676,12 @@ import { SailPointSDKService } from '../sailpoint-sdk.service';
       </ng-template>
 
       <div class="dialog-actions">
-        <button mat-button (click)="toggleEdit()" [disabled]="loading">
+        <button mat-button (click)="toggleEdit()" [disabled]="loading" *ngIf="selectedTab === 'Details'">
           {{ editMode ? 'Cancel' : 'Edit' }}
         </button>
 
         <button mat-raised-button color="primary" 
-                *ngIf="editMode" 
+                *ngIf="editMode && selectedTab === 'Details'" 
                 (click)="save()"
                 [disabled]="loading">
           <mat-progress-spinner *ngIf="loading" diameter="20" mode="indeterminate" class="spinner"></mat-progress-spinner>
@@ -704,7 +691,8 @@ import { SailPointSDKService } from '../sailpoint-sdk.service';
         <button mat-raised-button color="accent" 
                 (click)="testWorkflow()"
                 [disabled]="data?.enabled || loading"
-                [matTooltip]="data?.enabled ? 'Disable workflow before testing' : ''">
+                [matTooltip]="data?.enabled ? 'Disable workflow before testing' : ''"
+                *ngIf="selectedTab === 'Run'">
           <mat-icon>play_arrow</mat-icon>
           Test Workflow
         </button>
@@ -733,6 +721,8 @@ export class WorkflowDetailsDialogComponent implements OnInit {
   "input": {}
 }`;
 
+  selectedTab = 'Details';
+
   constructor(
     @Inject(MAT_DIALOG_DATA) public data: any,
     private sdk: SailPointSDKService,
@@ -741,6 +731,10 @@ export class WorkflowDetailsDialogComponent implements OnInit {
   ) {
     this.editData = { ...data };
     this.jsonText = JSON.stringify(data, null, 2);
+  }
+
+  onTabChange(tab: any): void {
+    this.selectedTab = tab?.textLabel || 'Details';
   }
 
   async ngOnInit(): Promise<void> {
@@ -761,11 +755,6 @@ export class WorkflowDetailsDialogComponent implements OnInit {
       this.data = res?.data || res;
       this.editData = JSON.parse(JSON.stringify(this.data));
       this.jsonText = JSON.stringify(this.data, null, 2);
-
-      const flowSteps = this.getFlowSteps();
-      if (flowSteps.length && !this.selectedExecutionStepKey) {
-        this.selectExecutionStep(flowSteps[0].key, flowSteps[0].step);
-      }
     } catch (e: any) {
       const errorMessage = e?.response?.data?.message || e?.message || 'Failed to load workflow details';
       this.showMessage(errorMessage, 'error');
@@ -898,12 +887,23 @@ export class WorkflowDetailsDialogComponent implements OnInit {
     }
     this.selectedExecutionId = executionId;
     this.executionHistory = null;
+    this.selectedExecutionStepKey = null;
+    this.selectedExecutionStepValue = null;
     try {
       const res = await (this.sdk as any).getWorkflowExecution({
         id: executionId
       });
 
       this.executionDetails = res?.data || res;
+
+      // Automatically load history for flow visualization
+      await this.loadExecutionHistory(executionId);
+
+      // Auto-select first step if available
+      if (Array.isArray(this.executionHistory) && this.executionHistory.length > 0) {
+        const firstStep = this.executionHistory[0];
+        this.selectExecutionStep(firstStep.stepId || firstStep.name || '0', firstStep);
+      }
 
     } catch (e) {
       console.error('Execution details failed', e);
@@ -1039,18 +1039,15 @@ export class WorkflowDetailsDialogComponent implements OnInit {
     return Number.isFinite(Number(value)) ? Number(value) : 0;
   }
 
-  getFlowSteps(): Array<{ key: string; step: any }> {
-    const definition = this.data?.definition;
-    if (!definition) {
+  getExecutionFlowSteps(): Array<{ key: string; step: any }> {
+    if (!Array.isArray(this.executionHistory)) {
       return [];
     }
 
-    const steps = definition.steps ?? definition.nodes;
-    if (!steps || typeof steps !== 'object') {
-      return [];
-    }
-
-    return Object.entries(steps).map(([key, value]) => ({ key, step: value }));
+    return this.executionHistory.map((step: any, index: number) => ({
+      key: step.stepId || step.name || `step-${index}`,
+      step: step
+    }));
   }
 
   selectExecutionStep(stepKey: string, stepValue: any): void {
@@ -1064,9 +1061,7 @@ export class WorkflowDetailsDialogComponent implements OnInit {
     }
 
     return this.executionHistory.find((item: any) =>
-      item?.stepId === stepKey ||
-      item?.step?.id === stepKey ||
-      item?.name === stepKey
+      (item?.stepId || item?.name || `step-${this.executionHistory.indexOf(item)}`) === stepKey
     ) || null;
   }
 
